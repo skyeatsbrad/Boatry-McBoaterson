@@ -15,6 +15,10 @@ config/icon="res://icon.png"
 GameManager="*res://scripts/autoload/game_manager.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
 AchievementManager="*res://scripts/autoload/achievement_manager.gd"
+HapticFeedback="*res://scripts/mobile/haptic_feedback.gd"
+ColorblindMode="*res://scripts/accessibility/colorblind_mode.gd"
+GameSpeed="*res://scripts/accessibility/game_speed.gd"
+ScreenReader="*res://scripts/accessibility/screen_reader.gd"
 
 [display]
 
