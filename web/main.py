@@ -1,4 +1,3 @@
-import asyncio
 """
 Survivor - A Vampire Survivors-style game built with Pygame.
 Features: multiple weapons, bosses, dash, particles, screen shake,
@@ -10,7 +9,8 @@ import sys
 import math
 import random
 import json
-import array as arr_module
+import os
+import asyncio
 
 HAS_UPDATER = False
 
@@ -129,6 +129,66 @@ def draw_bar(surface, x, y, w, h, ratio, color, bg=GRAY):
 
 
 # ===========================================================================
+
+# ===========================================================================
+# Section 2b: Sprite Loading System
+# ===========================================================================
+ASSET_DIR = "assets"
+SPRITES = {}
+
+def load_sprites():
+    """Load all sprite assets, scale preserving aspect ratio."""
+    global SPRITES
+    defs = {
+        "player_tugboat": ("player_tugboat.png", 90),
+        "player_warship": ("player_warship.png", 90),
+        "player_speedboat": ("player_speedboat.png", 90),
+        "hero_boat": ("hero_boat.png", 90),
+        "enemy_zombie": ("enemy_zombie.png", 48),
+        "enemy_skeleton": ("enemy_skeleton.png", 48),
+        "enemy_cthulhu_fisher": ("enemy_cthulhu_fisher.png", 58),
+        "enemy_anglerfish": ("enemy_anglerfish.png", 50),
+        "enemy_cthulhu_priest": ("enemy_cthulhu_priest.png", 58),
+        "boss_kraken": ("boss_kraken.png", 130),
+    }
+    for key, (filename, target_h) in defs.items():
+        path = os.path.join(ASSET_DIR, filename)
+        try:
+            raw = pygame.image.load(path).convert_alpha()
+            w, h = raw.get_size()
+            scale = target_h / h
+            new_w, new_h = int(w * scale), int(h * scale)
+            img = pygame.transform.smoothscale(raw, (new_w, new_h))
+            SPRITES[key] = img
+            SPRITES[key + "_flip"] = pygame.transform.flip(img, True, False)
+        except Exception as e:
+            print(f"Warning: Could not load {filename}: {e}")
+    # Character select previews (larger)
+    preview_h = 110
+    for name in ["player_tugboat", "player_warship", "player_speedboat", "hero_boat"]:
+        fname = defs[name][0]
+        path = os.path.join(ASSET_DIR, fname)
+        try:
+            raw = pygame.image.load(path).convert_alpha()
+            w, h = raw.get_size()
+            scale = preview_h / h
+            SPRITES[name + "_preview"] = pygame.transform.smoothscale(
+                raw, (int(w * scale), preview_h))
+        except Exception:
+            pass
+
+# Mapping from character index to sprite key
+CHAR_SPRITE_KEYS = ["player_tugboat", "player_warship", "player_speedboat"]
+# Mapping from enemy variant to sprite key(s)
+ENEMY_SPRITE_MAP = {
+    "normal": ["enemy_zombie", "enemy_skeleton"],
+    "fast": ["enemy_anglerfish"],
+    "tank": ["enemy_cthulhu_fisher"],
+    "elite": ["enemy_cthulhu_priest"],
+}
+
+
+
 # Section 3: Save / Load System
 # ===========================================================================
 DEFAULT_SAVE = {
@@ -165,64 +225,13 @@ def save_game(data):
 # ===========================================================================
 class SoundManager:
     def __init__(self):
-        try:
-            pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
-            self.enabled = True
-        except Exception:
-            self.enabled = False
-        self.sounds = {}
-        self.volume = 0.5
-        if self.enabled:
-            pass  # no sound gen in web
-
-    def _tone(self, freq, dur, vol=0.3, wave="sine"):
-        sr = 22050
-        n = int(sr * dur)
-        buf = arr_module.array("h", [0] * n)
-        for i in range(n):
-            t = i / sr
-            env = max(0, 1 - i / n)
-            if wave == "sine":
-                v = math.sin(2 * math.pi * freq * t)
-            elif wave == "square":
-                v = 1 if math.sin(2 * math.pi * freq * t) > 0 else -1
-            elif wave == "noise":
-                v = random.uniform(-1, 1)
-            else:
-                v = math.sin(2 * math.pi * freq * t)
-            buf[i] = int(v * vol * env * 32767)
-        return pygame.mixer.Sound(buffer=buf)
-
-    def _generate_sounds(self):
-        self.sounds["shoot"] = self._tone(600, 0.08, 0.2)
-        self.sounds["hit"] = self._tone(200, 0.1, 0.25, "square")
-        self.sounds["kill"] = self._tone(800, 0.12, 0.2)
-        self.sounds["gem"] = self._tone(1200, 0.06, 0.15)
-        self.sounds["levelup"] = self._tone(880, 0.3, 0.3)
-        self.sounds["dash"] = self._tone(400, 0.15, 0.2, "noise")
-        self.sounds["hurt"] = self._tone(150, 0.2, 0.3, "square")
-        self.sounds["boss_roar"] = self._tone(80, 0.5, 0.4, "square")
-        self.sounds["explosion"] = self._tone(100, 0.3, 0.35, "noise")
-        self.sounds["lightning"] = self._tone(1500, 0.1, 0.2, "square")
-        self.sounds["heal"] = self._tone(1000, 0.2, 0.2)
-        self.sounds["chest"] = self._tone(660, 0.15, 0.25)
-        self.sounds["achievement"] = self._tone(1100, 0.4, 0.3)
-        self.sounds["select"] = self._tone(500, 0.05, 0.15)
-        self.sounds["boomerang"] = self._tone(350, 0.12, 0.2)
-
+        self.volume = 0.7
+    def set_volume(self, v):
+        self.volume = v
     def play(self, name):
-        if self.enabled and name in self.sounds:
-            s = self.sounds[name]
-            s.set_volume(self.volume)
-            s.play()
-
-    def set_volume(self, vol):
-        self.volume = clamp(vol, 0, 1)
+        pass
 
 
-# ===========================================================================
-# Section 5: Particle System
-# ===========================================================================
 class Particle:
     __slots__ = ("x", "y", "vx", "vy", "color", "life", "max_life", "size", "shrink", "glow")
 
@@ -583,11 +592,10 @@ class Player:
         sx = int(self.x - cam_x)
         sy = int(self.y - cam_y)
         bob = math.sin(self.bob_timer) * 4
-        arm_flex = math.sin(self.bob_timer * 3) * 0.25 + 1.0
         ex = 1 if self.facing_x >= 0 else -1
         t = pygame.time.get_ticks() / 1000.0
 
-        # Aura glow (dark, fiery)
+        # Aura glow
         if self.has_aura:
             aura_surf = pygame.Surface(
                 (self.aura_radius * 2, self.aura_radius * 2), pygame.SRCALPHA)
@@ -598,13 +606,12 @@ class Player:
                                (self.aura_radius, self.aura_radius), int(self.aura_radius * 0.7))
             surface.blit(aura_surf, (sx - self.aura_radius, sy - self.aura_radius))
 
-        # Orbital blades (fiery)
+        # Orbital blades
         if self.has_orbit:
             for i in range(self.orbit_count):
                 a = self.orbit_angle + (2 * math.pi * i / self.orbit_count)
                 ox = sx + math.cos(a) * self.orbit_radius
                 oy = sy + math.sin(a) * self.orbit_radius
-                # Glow
                 gs = pygame.Surface((20, 20), pygame.SRCALPHA)
                 pygame.draw.circle(gs, (100, 200, 255, 60), (10, 10), 10)
                 surface.blit(gs, (int(ox) - 10, int(oy) - 10))
@@ -612,221 +619,64 @@ class Player:
                 pygame.draw.circle(surface, WHITE, (int(ox), int(oy)), 8, 2)
                 pygame.draw.circle(surface, WHITE, (int(ox), int(oy)), 4)
 
-        # Wake/splash behind boat (larger, atmospheric)
-        for i in range(6):
-            wx = sx - ex * (22 + i * 10)
-            wy = int(sy + bob + 14 + random.randint(-3, 3))
-            wa = max(0, 80 - i * 14)
-            ws = pygame.Surface((16, 8), pygame.SRCALPHA)
-            pygame.draw.ellipse(ws, (120, 160, 200, wa), (0, 0, 16, 8))
-            surface.blit(ws, (wx - 8, wy - 4))
+        # Get sprite
+        sprite_key = CHAR_SPRITE_KEYS[self.char_idx] if self.char_idx < len(CHAR_SPRITE_KEYS) else "player_tugboat"
+        flip_key = sprite_key + ("_flip" if ex < 0 else "")
+        sprite = SPRITES.get(flip_key)
 
-        # Dash ghost trail (fiery)
-        if self.dash_timer > 0:
-            for i in range(5):
-                gx = sx - self.dash_dx * (i + 1) * 14
-                gy = sy + bob - self.dash_dy * (i + 1) * 14
-                ghost = pygame.Surface((70, 50), pygame.SRCALPHA)
-                a = max(0, 100 - i * 22)
-                pygame.draw.ellipse(ghost, (*FIRE_MID, a), (5, 8, 60, 34))
-                surface.blit(ghost, (int(gx) - 35, int(gy) - 25))
+        # Wake/foam behind boat
+        for i in range(4):
+            wx = sx - ex * (20 + i * 12)
+            wy = int(sy + bob + 18 + random.randint(-2, 2))
+            wa = max(0, 70 - i * 18)
+            ws = pygame.Surface((14, 6), pygame.SRCALPHA)
+            pygame.draw.ellipse(ws, (120, 160, 200, wa), (0, 0, 14, 6))
+            surface.blit(ws, (wx - 7, wy - 3))
+
+        # Dash ghost trail (using sprites)
+        if self.dash_timer > 0 and sprite:
+            for i in range(4):
+                gx = int(sx - self.dash_dx * (i + 1) * 18)
+                gy = int(sy + bob - self.dash_dy * (i + 1) * 18)
+                alpha = max(0, 120 - i * 30)
+                ghost = sprite.copy()
+                ghost.set_alpha(alpha)
+                surface.blit(ghost, (gx - sprite.get_width() // 2,
+                                     gy - sprite.get_height() // 2))
 
         blink = self.invuln_timer > 0 and int(self.invuln_timer * 10) % 2
         if not blink:
             by = int(sy + bob)
+            if sprite:
+                # Shadow under sprite
+                sw, sh = sprite.get_size()
+                shadow = pygame.Surface((sw, 12), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow, (0, 0, 0, 30), (4, 0, sw - 8, 12))
+                surface.blit(shadow, (sx - sw // 2, by + sh // 3))
 
-            # === CAPE (behind boat) ===
-            cape_wave = math.sin(self.bob_timer * 2) * 6
-            cape_wave2 = math.sin(self.bob_timer * 1.5 + 1) * 4
-            cape_pts = [
-                (sx - 10 * ex, by - 6),
-                (sx - 14 * ex, by + 5),
-                (sx - 30 * ex - cape_wave, by + 35 + abs(cape_wave2)),
-                (sx - 20 * ex - cape_wave2, by + 40 + abs(cape_wave)),
-                (sx - 5 * ex, by + 30),
-                (sx + 8 * ex, by + 28 + abs(cape_wave2) // 2),
-                (sx + 20 * ex + cape_wave2, by + 38 + abs(cape_wave)),
-                (sx + 28 * ex + cape_wave, by + 32),
-                (sx + 14 * ex, by + 5),
-                (sx + 10 * ex, by - 6),
-            ]
-            pygame.draw.polygon(surface, CAPE_BLUE, cape_pts)
-            # Cape highlight edge
-            for i in range(len(cape_pts) - 1):
-                pygame.draw.line(surface, CAPE_DARK, cape_pts[i], cape_pts[i + 1], 2)
-            # Cape interior folds
-            fold_c = tuple(max(0, c - 15) for c in CAPE_BLUE)
-            pygame.draw.line(surface, fold_c,
-                             (sx - 5 * ex, by + 10), (sx - 15 * ex - int(cape_wave * 0.5), by + 32), 2)
-            pygame.draw.line(surface, fold_c,
-                             (sx + 5 * ex, by + 10), (sx + 12 * ex + int(cape_wave2 * 0.5), by + 30), 2)
+                draw_sprite = sprite
+                # Damage flash (red tint when recently hit)
+                if self.invuln_timer > 0.2:
+                    draw_sprite = sprite.copy()
+                    tint = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
+                    tint.fill((255, 60, 60, 100))
+                    draw_sprite.blit(tint, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                    white = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
+                    white.fill((255, 180, 180, 80))
+                    draw_sprite.blit(white, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
 
-            cc = self.char_color
-            lighter = tuple(min(c + 50, 255) for c in cc)
-            darker = tuple(max(c - 50, 0) for c in cc)
-
-            # === BOAT HULL (much larger, detailed) ===
-            # Main hull shape
-            hull_pts = [
-                (sx - 30 * ex, by + 16), (sx - 28 * ex, by - 10),
-                (sx - 18 * ex, by - 18), (sx - 6 * ex, by - 20),
-                (sx + 8 * ex, by - 20), (sx + 22 * ex, by - 16),
-                (sx + 32 * ex, by - 8), (sx + 38 * ex, by),
-                (sx + 32 * ex, by + 12), (sx + 10 * ex, by + 18),
-                (sx - 8 * ex, by + 18), (sx - 30 * ex, by + 16)]
-            pygame.draw.polygon(surface, HULL_WHITE, hull_pts)
-            # Hull red stripe (waterline)
-            stripe_pts = [
-                (sx - 28 * ex, by + 4), (sx + 34 * ex, by + 4),
-                (sx + 32 * ex, by + 12), (sx + 10 * ex, by + 18),
-                (sx - 8 * ex, by + 18), (sx - 30 * ex, by + 16)]
-            pygame.draw.polygon(surface, HULL_RED, stripe_pts)
-            # Hull outline
-            pygame.draw.polygon(surface, BLACK, hull_pts, 3)
-            # Bow highlight
-            pygame.draw.line(surface, WHITE,
-                             (sx + 30 * ex, by - 6), (sx + 38 * ex, by), 3)
-            # Rivets along hull
-            for i in range(7):
-                rx = sx + int((-24 + i * 8) * ex)
-                ry = by - 2
-                pygame.draw.circle(surface, (160, 155, 150), (rx, ry), 2)
-                pygame.draw.circle(surface, (120, 115, 110), (rx, ry + 1), 1)
-            # Hull shadow underneath
-            shadow_s = pygame.Surface((70, 10), pygame.SRCALPHA)
-            pygame.draw.ellipse(shadow_s, (0, 0, 0, 40), (0, 0, 70, 10))
-            surface.blit(shadow_s, (sx - 35, by + 18))
-
-            # Cabin / wheelhouse (larger, detailed)
-            cab_w, cab_h = 22, 18
-            cab_x = sx - 8 * ex
-            cab_y = by - 20 - cab_h
-            pygame.draw.rect(surface, HULL_WHITE, (cab_x - cab_w // 2, cab_y, cab_w, cab_h))
-            pygame.draw.rect(surface, (200, 195, 190), (cab_x - cab_w // 2, cab_y, cab_w, cab_h // 2))
-            pygame.draw.rect(surface, BLACK, (cab_x - cab_w // 2, cab_y, cab_w, cab_h), 2)
-            # Windows (two, glowing)
-            for wi in range(-1, 2, 2):
-                wx = cab_x + wi * 5
-                wy = cab_y + 4
-                # Window glow
-                wg = pygame.Surface((10, 8), pygame.SRCALPHA)
-                pygame.draw.rect(wg, (100, 160, 220, 60), (0, 0, 10, 8))
-                surface.blit(wg, (wx - 5, wy - 4))
-                pygame.draw.rect(surface, (100, 170, 240), (wx - 3, wy - 2, 6, 5))
-                pygame.draw.rect(surface, (60, 100, 160), (wx - 3, wy - 2, 6, 5), 1)
-            # Smokestack (taller)
-            pygame.draw.rect(surface, (80, 75, 70), (cab_x - 3, cab_y - 12, 6, 12))
-            pygame.draw.rect(surface, (60, 55, 50), (cab_x - 4, cab_y - 14, 8, 4))
-            pygame.draw.rect(surface, BLACK, (cab_x - 4, cab_y - 14, 8, 4), 1)
-            # Red band on smokestack
-            pygame.draw.rect(surface, HULL_RED, (cab_x - 3, cab_y - 8, 6, 3))
-            # Smoke puffs (darker, atmospheric)
-            smoke_off = int(self.bob_timer * 4) % 25
-            for i in range(4):
-                sa = max(0, 80 - i * 20 - smoke_off)
-                sz = 5 + i * 2
-                ssurf = pygame.Surface((sz * 2, sz * 2), pygame.SRCALPHA)
-                pygame.draw.circle(ssurf, (100, 95, 90, sa), (sz, sz), sz)
-                surface.blit(ssurf, (cab_x - sz,
-                                     cab_y - 14 - 8 - i * 8 - smoke_off))
-
-            # === MUSCULAR ARMS (larger, more detailed) ===
-            skin = (210, 165, 120)
-            skin_dk = (175, 135, 90)
-            skin_hi = (235, 195, 155)
-            skin_vein = (185, 120, 100)
-            bicep_r = int(9 * arm_flex)
-
-            # Left arm
-            ls = (sx - 28, by - 6)
-            le = (sx - 44, int(by - 20 * arm_flex))
-            lh = (sx - 50, int(by - 34 * arm_flex))
-            # Upper arm
-            pygame.draw.line(surface, skin_dk, ls, le, int(10 * arm_flex))
-            # Bicep bulge
-            bx_l = (ls[0] + le[0]) // 2
-            by_l = (ls[1] + le[1]) // 2
-            pygame.draw.circle(surface, skin, (bx_l, by_l), bicep_r)
-            pygame.draw.circle(surface, skin_hi, (bx_l - 2, by_l - 3), max(1, bicep_r - 3))
-            # Vein detail
-            pygame.draw.line(surface, skin_vein, (bx_l - 3, by_l - 2), (bx_l + 2, by_l + 4), 1)
-            # Forearm
-            pygame.draw.line(surface, skin_dk, le, lh, 7)
-            # Fist
-            pygame.draw.circle(surface, skin, lh, 7)
-            pygame.draw.circle(surface, skin_dk, lh, 7, 2)
-
-            # Right arm
-            rs = (sx + 28, by - 6)
-            re = (sx + 44, int(by - 20 * arm_flex))
-            rh = (sx + 50, int(by - 34 * arm_flex))
-            pygame.draw.line(surface, skin_dk, rs, re, int(10 * arm_flex))
-            bx_r = (rs[0] + re[0]) // 2
-            by_r = (rs[1] + re[1]) // 2
-            pygame.draw.circle(surface, skin, (bx_r, by_r), bicep_r)
-            pygame.draw.circle(surface, skin_hi, (bx_r + 2, by_r - 3), max(1, bicep_r - 3))
-            pygame.draw.line(surface, skin_vein, (bx_r + 3, by_r - 2), (bx_r - 2, by_r + 4), 1)
-            pygame.draw.line(surface, skin_dk, re, rh, 7)
-            pygame.draw.circle(surface, skin, rh, 7)
-            pygame.draw.circle(surface, skin_dk, rh, 7, 2)
-
-            # === WEAPON IN HAND ===
-            # Sword / weapon glow in right hand
-            sword_base = rh
-            sword_tip = (rh[0] + 18 * ex, rh[1] - 30)
-            sword_mid = (rh[0] + 10 * ex, rh[1] - 16)
-            # Sword glow
-            sg = pygame.Surface((30, 40), pygame.SRCALPHA)
-            glow_pulse = int(30 + 15 * math.sin(t * 6))
-            pygame.draw.line(sg, (255, 200, 80, glow_pulse), (15, 35), (15, 5), 8)
-            surface.blit(sg, (sword_base[0] - 15, sword_base[1] - 35))
-            # Blade
-            blade_pts = [
-                (sword_base[0] + 2 * ex, sword_base[1] - 2),
-                (sword_tip[0] + 1 * ex, sword_tip[1]),
-                (sword_base[0] - 2 * ex, sword_base[1] - 2)]
-            pygame.draw.polygon(surface, (200, 200, 210), blade_pts)
-            pygame.draw.polygon(surface, WHITE, blade_pts, 1)
-            # Guard
-            pygame.draw.line(surface, GOLD, (sword_base[0] - 6, sword_base[1]),
-                             (sword_base[0] + 6, sword_base[1]), 3)
-
-            # Anchor/rope in left hand
-            pygame.draw.line(surface, (100, 80, 60), lh, (lh[0] - 4, lh[1] + 15), 2)
-            pygame.draw.line(surface, (100, 80, 60), (lh[0] - 4, lh[1] + 15),
-                             (lh[0] - 8, lh[1] + 20), 2)
-            # Small anchor shape
-            pygame.draw.circle(surface, (120, 110, 100), (lh[0] - 4, lh[1] + 16), 3, 1)
-
-            # === FACE (glowing eyes, menacing) ===
-            # Eye sockets (dark)
-            pygame.draw.circle(surface, (40, 20, 20), (sx - 6 * ex, by - 8), 7)
-            pygame.draw.circle(surface, (40, 20, 20), (sx + 8 * ex, by - 8), 7)
-            # Eye glow
-            eg = pygame.Surface((20, 20), pygame.SRCALPHA)
-            glow_i = int(40 + 20 * math.sin(t * 5))
-            pygame.draw.circle(eg, (*EYE_GLOW, glow_i), (10, 10), 10)
-            surface.blit(eg, (sx - 6 * ex - 10, by - 8 - 10))
-            surface.blit(eg, (sx + 8 * ex - 10, by - 8 - 10))
-            # Eyes (glowing red-orange like reference)
-            pygame.draw.circle(surface, EYE_GLOW, (sx - 6 * ex, by - 8), 5)
-            pygame.draw.circle(surface, (255, 200, 80), (sx - 5 * ex, by - 9), 2)
-            pygame.draw.circle(surface, EYE_GLOW, (sx + 8 * ex, by - 8), 5)
-            pygame.draw.circle(surface, (255, 200, 80), (sx + 9 * ex, by - 9), 2)
-            # Angry eyebrows
-            pygame.draw.line(surface, BLACK,
-                             (sx - 12 * ex, by - 14), (sx - 2 * ex, by - 12), 3)
-            pygame.draw.line(surface, BLACK,
-                             (sx + 4 * ex, by - 12), (sx + 14 * ex, by - 14), 3)
-            # Grim mouth
-            pygame.draw.line(surface, (40, 20, 20),
-                             (sx - 4, by + 2), (sx + 4, by + 1), 2)
+                surface.blit(draw_sprite, (sx - sw // 2, by - sh // 2))
+            else:
+                # Fallback: simple colored circle
+                pygame.draw.circle(surface, self.char_color, (sx, by), self.radius)
+                pygame.draw.circle(surface, WHITE, (sx, by), self.radius, 2)
 
         # Dash cooldown indicator
         if self.dash_cooldown_timer > 0:
             ratio = 1 - self.dash_cooldown_timer / DASH_COOLDOWN
             draw_bar(surface, sx - 20, int(sy + bob) + self.radius + 6,
                      40, 4, ratio, CYAN, DARK_GRAY)
+
 
 
 class Enemy:
@@ -846,7 +696,7 @@ class Enemy:
         self.drop_chance = 0.05
 
         variant = random.random()
-        if variant < 0.15 and wave >= 2:
+        if variant < 0.12 and wave >= 2:
             self.max_hp = int(self.max_hp * 2.5)
             self.hp = self.max_hp
             self.speed *= 0.6
@@ -856,15 +706,29 @@ class Enemy:
             self.color = PURPLE
             self.damage = int(self.damage * 1.5)
             self.variant = "tank"
-        elif variant < 0.3 and wave >= 1:
+        elif variant < 0.24 and wave >= 1:
             self.speed *= 1.8
             self.max_hp = int(self.max_hp * 0.6)
             self.hp = self.max_hp
             self.color = ORANGE
             self.variant = "fast"
+        elif variant < 0.32 and wave >= 4:
+            self.max_hp = int(self.max_hp * 1.8)
+            self.hp = self.max_hp
+            self.speed *= 0.9
+            self.radius += 4
+            self.xp_value *= 2
+            self.gold_value *= 2
+            self.color = TEAL
+            self.damage = int(self.damage * 1.3)
+            self.variant = "elite"
         else:
             self.color = RED
             self.variant = "normal"
+        # Assign sprite key for this variant
+        sprite_options = ENEMY_SPRITE_MAP.get(self.variant, ["enemy_zombie"])
+        self.sprite_key = random.choice(sprite_options)
+
 
     def update(self, px, py):
         a = angle_to((self.x, self.y), (px, py))
@@ -876,122 +740,47 @@ class Enemy:
 
     def draw(self, surface, cam_x, cam_y):
         sx, sy = int(self.x - cam_x), int(self.y - cam_y)
-        bob = math.sin(self.anim_timer) * 4
-        tail_wag = math.sin(self.anim_timer * 2) * 6
+        bob = math.sin(self.anim_timer) * 3
         sy_b = int(sy + bob)
-        color = WHITE if self.hit_flash > 0 else self.color
-        r = self.radius
-        lighter = tuple(min(c + 60, 255) for c in self.color)
-        darker = tuple(max(c - 50, 0) for c in self.color)
 
-        # Shadow underneath
-        shadow = pygame.Surface((r * 3, r), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 25), (0, 0, r * 3, r))
-        surface.blit(shadow, (sx - r * 3 // 2, sy_b + r // 2))
+        # Get sprite (face toward player = face right by default)
+        sprite = SPRITES.get(self.sprite_key)
+        if sprite:
+            sw, sh = sprite.get_size()
 
-        # === FISH BODY ===
-        # Tail fin (larger, behind body)
-        tail_pts = [
-            (sx - r + 2, sy_b),
-            (sx - r - 14, int(sy_b - 12 + tail_wag)),
-            (sx - r - 8, int(sy_b + tail_wag * 0.3)),
-            (sx - r - 14, int(sy_b + 12 + tail_wag))]
-        pygame.draw.polygon(surface, darker, tail_pts)
-        pygame.draw.polygon(surface, BLACK, tail_pts, 2)
+            # Shadow underneath
+            shadow = pygame.Surface((sw + 4, 10), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 25), (0, 0, sw + 4, 10))
+            surface.blit(shadow, (sx - sw // 2 - 2, sy_b + sh // 3))
 
-        # Main body (ellipse, bigger)
-        body_w = r * 2 + 4
-        body_h = int(r * 1.5)
-        body_rect = pygame.Rect(sx - body_w // 2, sy_b - body_h // 2, body_w, body_h)
-        pygame.draw.ellipse(surface, color, body_rect)
-        # Belly (lighter underside)
-        belly_rect = pygame.Rect(sx - body_w // 2 + 4, sy_b + 1,
-                                 body_w - 8, body_h // 2 - 3)
-        pygame.draw.ellipse(surface, lighter, belly_rect)
-        # Body outline (thick)
-        pygame.draw.ellipse(surface, BLACK, body_rect, 3)
-        # Scale pattern (subtle darker spots)
-        for i in range(3):
-            ssx = sx - r // 2 + i * (r // 2)
-            ssy = sy_b - 2
-            pygame.draw.circle(surface, darker, (ssx, ssy), 2)
+            draw_sprite = sprite
+            # Hit flash (white overlay)
+            if self.hit_flash > 0:
+                draw_sprite = sprite.copy()
+                white = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
+                white.fill((255, 255, 255, 160))
+                draw_sprite.blit(white, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
 
-        # Dorsal fin (larger, spiky)
-        fin_pts = [
-            (sx - 4, sy_b - body_h // 2),
-            (sx - 8, sy_b - body_h // 2 - 10),
-            (sx - 2, sy_b - body_h // 2 - 6),
-            (sx + 3, sy_b - body_h // 2 - 12),
-            (sx + 7, sy_b - body_h // 2)]
-        pygame.draw.polygon(surface, darker, fin_pts)
-        pygame.draw.polygon(surface, BLACK, fin_pts, 2)
-        # Pectoral fin
-        pf_pts = [
-            (sx + 2, sy_b + 2),
-            (sx + 8, sy_b + body_h // 2 + 4),
-            (sx - 4, sy_b + body_h // 2 + 2)]
-        pygame.draw.polygon(surface, darker, pf_pts)
+            surface.blit(draw_sprite, (sx - sw // 2, sy_b - sh // 2))
+        else:
+            # Fallback: simple colored circle
+            r = self.radius
+            color = WHITE if self.hit_flash > 0 else self.color
+            pygame.draw.circle(surface, color, (sx, sy_b), r)
+            pygame.draw.circle(surface, BLACK, (sx, sy_b), r, 2)
 
-        if self.variant == "tank":
-            # Pufferfish spikes (larger)
-            for i in range(12):
-                a = self.anim_timer * 0.3 + i * math.pi / 6
-                spx = sx + math.cos(a) * (r + 6)
-                spy = sy_b + math.sin(a) * (body_h // 2 + 4)
-                ix = sx + int(math.cos(a) * r * 0.8)
-                iy = sy_b + int(math.sin(a) * body_h // 2 * 0.8)
-                pygame.draw.line(surface, lighter, (ix, iy), (int(spx), int(spy)), 2)
-                pygame.draw.circle(surface, WHITE, (int(spx), int(spy)), 1)
-        if self.variant == "fast":
-            # Swordfish nose (longer, sharper)
-            nose_pts = [
-                (sx + r + 2, sy_b - 3),
-                (sx + r + 22, sy_b),
-                (sx + r + 2, sy_b + 3)]
-            pygame.draw.polygon(surface, lighter, nose_pts)
-            pygame.draw.polygon(surface, BLACK, nose_pts, 1)
-            # Speed lines
-            for i in range(3):
-                lx = sx - r - 5 - i * 8
-                ly = sy_b - 4 + i * 4
-                la = max(0, 60 - i * 20)
-                ls = pygame.Surface((12, 2), pygame.SRCALPHA)
-                ls.fill((200, 200, 255, la))
-                surface.blit(ls, (lx, ly))
-
-        # Eye (larger, glowing)
-        eye_x = sx + r // 2 + 2
-        eye_y = sy_b - body_h // 4
-        # Eye glow
-        eg = pygame.Surface((14, 14), pygame.SRCALPHA)
-        pygame.draw.circle(eg, (*EYE_GLOW, 40), (7, 7), 7)
-        surface.blit(eg, (eye_x - 7, eye_y - 7))
-        pygame.draw.circle(surface, (255, 240, 200), (eye_x, eye_y), 5)
-        pygame.draw.circle(surface, BLACK, (eye_x, eye_y), 5, 1)
-        pygame.draw.circle(surface, (200, 40, 20), (eye_x + 1, eye_y), 3)
-        pygame.draw.circle(surface, BLACK, (eye_x + 1, eye_y), 1)
-
-        # Mouth with teeth
-        mouth_x = sx + r - 2
-        mouth_y = sy_b + 2
-        pygame.draw.line(surface, BLACK, (mouth_x - 6, mouth_y), (mouth_x + 4, mouth_y + 1), 2)
-        # Teeth (jagged)
-        for i in range(3):
-            tx = mouth_x - 4 + i * 3
-            pygame.draw.polygon(surface, WHITE, [
-                (tx, mouth_y), (tx + 1, mouth_y + 4), (tx + 2, mouth_y)])
-            pygame.draw.polygon(surface, WHITE, [
-                (tx, mouth_y + 1), (tx + 1, mouth_y - 3), (tx + 2, mouth_y + 1)])
-
-        # HP bar (darker style)
+        # HP bar
         if self.hp < self.max_hp:
-            bw = max(24, r * 2 + 8)
+            sp = SPRITES.get(self.sprite_key)
+            bw = max(24, (sp.get_width() if sp else self.radius * 2) + 8)
             bx = sx - bw // 2
-            hp_y = sy_b - body_h // 2 - 12
+            sh = sp.get_height() if sp else self.radius * 2
+            hp_y = sy_b - sh // 2 - 8
             pygame.draw.rect(surface, (20, 10, 10), (bx - 1, hp_y - 1, bw + 2, 7))
             pygame.draw.rect(surface, BLOOD_RED,
                              (bx, hp_y, int(bw * self.hp / self.max_hp), 5))
             pygame.draw.rect(surface, (80, 30, 30), (bx, hp_y, bw, 5), 1)
+
 
 
 class Boss(Enemy):
@@ -1014,13 +803,15 @@ class Boss(Enemy):
         pulse = math.sin(self.anim_timer) * 4
         r = int(self.radius + pulse)
         t = pygame.time.get_ticks() / 1000.0
-        # Dark aura (larger, menacing)
+
+        # Dark aura rings
         for ar in range(3):
             aura_r = r + 20 + ar * 15
             aura = pygame.Surface((aura_r * 2, aura_r * 2), pygame.SRCALPHA)
             a = max(0, 25 - ar * 8)
             pygame.draw.circle(aura, (120, 0, 40, a), (aura_r, aura_r), aura_r)
             surface.blit(aura, (sx - aura_r, sy - aura_r))
+
         # Fire ring around boss
         for i in range(8):
             fa = t * 2 + i * math.pi / 4
@@ -1031,91 +822,46 @@ class Boss(Enemy):
             pygame.draw.circle(fs, (*fc, 120), (8, 8), 6 + random.randint(-2, 2))
             surface.blit(fs, (int(fx) - 8, int(fy) - 8))
 
-        color = WHITE if self.hit_flash > 0 else self.color
-        # Kraken body (main)
-        pygame.draw.circle(surface, color, (sx, sy), r)
-        # Body gradient ring
-        pygame.draw.circle(surface, (120, 25, 25), (sx, sy), r, 4)
-        pygame.draw.circle(surface, (80, 15, 15), (sx, sy), r - 4, 2)
-        # Texture spots
-        for i in range(6):
-            sa = i * math.pi / 3 + 0.5
-            spot_x = sx + int(math.cos(sa) * r * 0.5)
-            spot_y = sy + int(math.sin(sa) * r * 0.5)
-            pygame.draw.circle(surface, (80, 15, 15), (spot_x, spot_y), 4)
+        # Draw kraken sprite scaled to current boss radius
+        sprite = SPRITES.get("boss_kraken")
+        if sprite:
+            # Scale sprite to match boss radius (with pulse)
+            base_h = max(80, r * 3)
+            raw = sprite
+            ow, oh = raw.get_size()
+            scale = base_h / oh
+            sw, sh = int(ow * scale), int(oh * scale)
+            scaled = pygame.transform.smoothscale(raw, (sw, sh))
 
-        # Tentacles (more detailed, animated)
-        for i in range(8):
-            a = self.anim_timer * 0.4 + i * math.pi / 4
-            wave_off = math.sin(self.anim_timer * 2 + i) * 10
-            wave_off2 = math.cos(self.anim_timer * 1.5 + i) * 6
-            # Segmented tentacle
-            prev = (sx + int(math.cos(a) * r * 0.8),
-                    sy + int(math.sin(a) * r * 0.8))
-            for seg in range(4):
-                seg_len = 12 + seg * 4
-                seg_a = a + math.sin(self.anim_timer * 2 + i + seg * 0.8) * 0.4
-                nx = prev[0] + int(math.cos(seg_a) * seg_len)
-                ny = prev[1] + int(math.sin(seg_a) * seg_len) + int(wave_off * (seg + 1) / 4)
-                width = max(2, 6 - seg)
-                tc = (min(255, color[0] + seg * 10),
-                      max(0, color[1] - seg * 3),
-                      max(0, color[2] - seg * 3))
-                pygame.draw.line(surface, tc, prev, (nx, ny), width)
-                # Sucker dots
-                if seg < 3:
-                    mid = ((prev[0] + nx) // 2, (prev[1] + ny) // 2)
-                    pygame.draw.circle(surface, (140, 40, 40), mid, 2)
-                prev = (nx, ny)
-            # Tentacle tip
-            pygame.draw.circle(surface, color, prev, 3)
+            draw_sprite = scaled
+            if self.hit_flash > 0:
+                draw_sprite = scaled.copy()
+                white = pygame.Surface((sw, sh), pygame.SRCALPHA)
+                white.fill((255, 255, 255, 160))
+                draw_sprite.blit(white, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
 
-        # Glowing eyes (large, menacing)
-        for ex_off in [-14, 14]:
-            eye_x = sx + ex_off
-            eye_y = sy - 6
-            # Eye glow
-            eg = pygame.Surface((24, 24), pygame.SRCALPHA)
-            gi = int(60 + 30 * math.sin(t * 4))
-            pygame.draw.circle(eg, (255, 80, 0, gi), (12, 12), 12)
-            surface.blit(eg, (eye_x - 12, eye_y - 12))
-            pygame.draw.circle(surface, YELLOW, (eye_x, eye_y), 9)
-            pygame.draw.circle(surface, (255, 120, 0), (eye_x, eye_y), 6)
-            pygame.draw.circle(surface, RED, (eye_x, eye_y), 4)
-            pygame.draw.circle(surface, BLACK, (eye_x, eye_y), 9, 2)
-
-        # Crown (ornate, golden)
-        crown_y = sy - r - 2
-        pts = [(sx - 16, crown_y), (sx - 12, crown_y - 16),
-               (sx - 6, crown_y - 6), (sx, crown_y - 20),
-               (sx + 6, crown_y - 6), (sx + 12, crown_y - 16),
-               (sx + 16, crown_y)]
-        pygame.draw.polygon(surface, GOLD, pts)
-        pygame.draw.polygon(surface, (200, 160, 30), pts, 2)
-        # Crown jewels
-        for jx in [sx - 10, sx, sx + 10]:
-            pygame.draw.circle(surface, RED, (jx, crown_y - 10), 3)
-            pygame.draw.circle(surface, (255, 100, 100), (jx - 1, crown_y - 11), 1)
+            surface.blit(draw_sprite, (sx - sw // 2, sy - sh // 2))
+        else:
+            # Fallback circle
+            color = WHITE if self.hit_flash > 0 else self.color
+            pygame.draw.circle(surface, color, (sx, sy), r)
+            pygame.draw.circle(surface, (120, 25, 25), (sx, sy), r, 4)
 
         # Boss HP bar (wide, ornate)
         bw = min(240, self.radius * 5)
         bx = sx - bw // 2
         hp_y = sy - r - 28
-        # Background
         pygame.draw.rect(surface, (10, 5, 5), (bx - 2, hp_y - 2, bw + 4, 14))
-        # HP fill
         fill_w = int(bw * self.hp / self.max_hp)
         pygame.draw.rect(surface, BLOOD_RED, (bx, hp_y, fill_w, 10))
-        # Gradient overlay on HP
         for gi in range(fill_w):
             ga = int(30 * math.sin(gi * 0.1 + t * 3))
             gs = pygame.Surface((1, 10), pygame.SRCALPHA)
             gs.fill((255, 255, 255, max(0, ga)))
             surface.blit(gs, (bx + gi, hp_y))
-        # Border
         pygame.draw.rect(surface, GOLD, (bx - 2, hp_y - 2, bw + 4, 14), 2)
-        # Name
         draw_text(surface, "KRAKEN", 14, sx, hp_y - 14, GOLD, center=True)
+
 
 
 class Gem:
@@ -1376,6 +1122,7 @@ class Game:
         flags = pygame.FULLSCREEN if self.fullscreen else 0
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), flags)
         pygame.display.set_caption("BOATRY McBOATERSON")
+        load_sprites()
         self.clock = pygame.time.Clock()
         self.sound = SoundManager()
         self.sound.set_volume(self.save["settings"]["sfx_volume"])
@@ -2147,44 +1894,23 @@ class Game:
             pygame.draw.rect(self.screen, ch["color"],
                              (bx + 6, by + 6, box_w - 12, 4))
 
-            # Draw a mini boat preview
+            # Draw sprite preview
             cx, cy = bx + box_w // 2, by + 80
-            cc = ch["color"]
             bob = math.sin(t * 2 + i) * 3
             cy_b = int(cy + bob)
-            # Hull
-            hull = [(cx - 22, cy_b + 10), (cx - 20, cy_b - 8),
-                    (cx - 10, cy_b - 14), (cx + 10, cy_b - 14),
-                    (cx + 22, cy_b - 6), (cx + 28, cy_b),
-                    (cx + 22, cy_b + 10)]
-            pygame.draw.polygon(self.screen, cc, hull)
-            # Red stripe
-            pygame.draw.line(self.screen, HULL_RED,
-                             (cx - 20, cy_b + 3), (cx + 24, cy_b + 3), 2)
-            pygame.draw.polygon(self.screen, BLACK, hull, 2)
-            # Cabin
-            pygame.draw.rect(self.screen, (200, 195, 190),
-                             (cx - 12, cy_b - 14 - 12, 16, 12))
-            pygame.draw.rect(self.screen, BLACK,
-                             (cx - 12, cy_b - 14 - 12, 16, 12), 1)
-            # Window
-            pygame.draw.rect(self.screen, (100, 170, 240),
-                             (cx - 6, cy_b - 14 - 8, 5, 4))
-            # Smokestack
-            pygame.draw.rect(self.screen, (80, 75, 70),
-                             (cx - 5, cy_b - 14 - 20, 5, 8))
-            # Eyes
-            pygame.draw.circle(self.screen, EYE_GLOW, (cx - 4, cy_b - 6), 4)
-            pygame.draw.circle(self.screen, EYE_GLOW, (cx + 6, cy_b - 6), 4)
-            pygame.draw.circle(self.screen, (255, 200, 80), (cx - 3, cy_b - 7), 2)
-            pygame.draw.circle(self.screen, (255, 200, 80), (cx + 7, cy_b - 7), 2)
-            # Arms
-            pygame.draw.line(self.screen, (210, 165, 120),
-                             (cx - 20, cy_b - 4), (cx - 32, cy_b - 18), 5)
-            pygame.draw.circle(self.screen, (210, 165, 120), (cx - 32, cy_b - 18), 5)
-            pygame.draw.line(self.screen, (210, 165, 120),
-                             (cx + 20, cy_b - 4), (cx + 32, cy_b - 18), 5)
-            pygame.draw.circle(self.screen, (210, 165, 120), (cx + 32, cy_b - 18), 5)
+            preview_key = CHAR_SPRITE_KEYS[i] + "_preview" if i < len(CHAR_SPRITE_KEYS) else "hero_boat_preview"
+            preview = SPRITES.get(preview_key)
+            if preview:
+                pw, ph = preview.get_size()
+                # Shadow
+                shadow = pygame.Surface((pw, 10), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow, (0, 0, 0, 30), (0, 0, pw, 10))
+                self.screen.blit(shadow, (cx - pw // 2, cy_b + ph // 3))
+                self.screen.blit(preview, (cx - pw // 2, cy_b - ph // 2))
+            else:
+                # Fallback circle
+                pygame.draw.circle(self.screen, ch["color"], (cx, cy_b), 20)
+
 
             # Selection glow
             if selected:
@@ -2726,11 +2452,11 @@ class Game:
             self.clock.tick(FPS)
             await asyncio.sleep(0)
         pygame.quit()
+        sys.exit()
 
 
 async def main():
-    g = Game()
-    await g.run()
+    game = Game()
+    await game.run()
 
 asyncio.run(main())
-
