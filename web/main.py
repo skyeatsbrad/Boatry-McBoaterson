@@ -1,3 +1,4 @@
+import asyncio
 """
 Survivor - A Vampire Survivors-style game built with Pygame.
 Features: multiple weapons, bosses, dash, particles, screen shake,
@@ -8,17 +9,10 @@ import pygame
 import sys
 import math
 import random
-import time
 import json
-import os
 import array as arr_module
-import threading
 
-try:
-    from updater import check_for_update, download_and_apply_update, get_current_version
-    HAS_UPDATER = True
-except ImportError:
-    HAS_UPDATER = False
+HAS_UPDATER = False
 
 # ===========================================================================
 # Section 1: Constants
@@ -97,7 +91,7 @@ BOSS_WAVE_INTERVAL = 5
 MINIMAP_SIZE = 120
 MINIMAP_MARGIN = 10
 
-SAVE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "save_data.json")
+SAVE_FILE = "save_data.json"
 
 
 # ===========================================================================
@@ -179,7 +173,7 @@ class SoundManager:
         self.sounds = {}
         self.volume = 0.5
         if self.enabled:
-            self._generate_sounds()
+            pass  # no sound gen in web
 
     def _tone(self, freq, dur, vol=0.3, wave="sine"):
         sr = 22050
@@ -1389,9 +1383,7 @@ class Game:
         # Auto-update check (runs in background thread)
         self.update_available = None  # (version, url) or None
         self.update_status = ""  # "", "checking", "downloading", "ready", "failed"
-        if HAS_UPDATER:
-            self.update_status = "checking"
-            threading.Thread(target=self._check_update, daemon=True).start()
+        pass  # No updater in web version
         self.reset()
 
     def _check_update(self):
@@ -2404,7 +2396,7 @@ class Game:
         return True
 
     # ----- main loop -----
-    def run(self):
+    async def run(self):
         running = True
         while running:
             running = self.handle_events()
@@ -2412,9 +2404,13 @@ class Game:
             self.draw()
             pygame.display.flip()
             self.clock.tick(FPS)
+            await asyncio.sleep(0)
         pygame.quit()
-        sys.exit()
 
 
-if __name__ == "__main__":
-    Game().run()
+async def main():
+    g = Game()
+    await g.run()
+
+asyncio.run(main())
+
