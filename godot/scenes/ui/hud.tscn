@@ -1,0 +1,107 @@
+[gd_scene load_steps=2 format=3 uid="uid://bhud006"]
+
+[sub_resource type="SubViewport" id="SubViewport_1"]
+size = Vector2i(120, 120)
+
+[node name="HUD" type="CanvasLayer"]
+layer = 10
+
+[node name="HPBar" type="ProgressBar" parent="."]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 210.0
+offset_bottom = 30.0
+theme_override_styles/fill = null
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="HPBarFill" type="ColorRect" parent="HPBar"]
+layout_mode = 0
+offset_right = 200.0
+offset_bottom = 20.0
+color = Color(0.8, 0.1, 0.1, 0.3)
+
+[node name="XPBar" type="ProgressBar" parent="."]
+offset_left = 10.0
+offset_top = 34.0
+offset_right = 210.0
+offset_bottom = 48.0
+max_value = 100.0
+value = 0.0
+show_percentage = false
+
+[node name="XPBarFill" type="ColorRect" parent="XPBar"]
+layout_mode = 0
+offset_right = 200.0
+offset_bottom = 14.0
+color = Color(0.1, 0.2, 0.8, 0.3)
+
+[node name="GoldLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 54.0
+offset_right = 160.0
+offset_bottom = 74.0
+text = "Gold: 0"
+
+[node name="WaveLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 76.0
+offset_right = 160.0
+offset_bottom = 96.0
+text = "Wave: 1"
+
+[node name="TimeLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 98.0
+offset_right = 160.0
+offset_bottom = 118.0
+text = "Time: 00:00"
+
+[node name="KillsLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 120.0
+offset_right = 160.0
+offset_bottom = 140.0
+text = "Kills: 0"
+
+[node name="ComboLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 142.0
+offset_right = 160.0
+offset_bottom = 162.0
+text = "Combo: x1"
+
+[node name="WeaponLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 164.0
+offset_right = 210.0
+offset_bottom = 184.0
+text = "Weapon: Cannon"
+
+[node name="MinimapContainer" type="Control" parent="."]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -130.0
+offset_top = -130.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="MinimapBorder" type="ColorRect" parent="MinimapContainer"]
+layout_mode = 0
+offset_right = 120.0
+offset_bottom = 120.0
+color = Color(0.15, 0.15, 0.2, 0.8)
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="MinimapContainer"]
+layout_mode = 0
+offset_right = 120.0
+offset_bottom = 120.0
+
+[node name="SubViewport" type="SubViewport" parent="MinimapContainer/SubViewportContainer"]
+size = Vector2i(120, 120)
