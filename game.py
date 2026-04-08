@@ -47,10 +47,10 @@ TEAL = (0, 180, 180)
 WORLD_W, WORLD_H = 3000, 3000
 TILE_SIZE = 64
 
-PLAYER_RADIUS = 16
+PLAYER_RADIUS = 20
 PLAYER_SPEED = 3.0
-PLAYER_BASE_HP = 100
-INVULN_TIME = 0.3
+PLAYER_BASE_HP = 120
+INVULN_TIME = 0.4
 DASH_SPEED = 12
 DASH_DURATION = 8
 DASH_COOLDOWN = 90
@@ -61,20 +61,20 @@ PROJ_DAMAGE = 20
 PROJ_LIFETIME = 60
 PROJ_COOLDOWN = 30
 
-ENEMY_RADIUS = 14
-ENEMY_BASE_SPEED = 1.2
-ENEMY_BASE_HP = 30
-ENEMY_DAMAGE = 10
-SPAWN_DIST_MIN = 400
-SPAWN_DIST_MAX = 600
+ENEMY_RADIUS = 12
+ENEMY_BASE_SPEED = 0.9
+ENEMY_BASE_HP = 25
+ENEMY_DAMAGE = 8
+SPAWN_DIST_MIN = 450
+SPAWN_DIST_MAX = 650
 
 GEM_RADIUS = 6
 GEM_ATTRACT_DIST = 100
 GEM_ATTRACT_SPEED = 5
 
-INITIAL_SPAWN_RATE = 90
-MIN_SPAWN_RATE = 15
-WAVE_DURATION = 30
+INITIAL_SPAWN_RATE = 120
+MIN_SPAWN_RATE = 25
+WAVE_DURATION = 45
 BOSS_WAVE_INTERVAL = 5
 
 MINIMAP_SIZE = 120
@@ -558,8 +558,9 @@ class Player:
     def draw(self, surface, cam_x, cam_y):
         sx = int(self.x - cam_x)
         sy = int(self.y - cam_y)
-        bob = math.sin(self.bob_timer) * 2
-        arm_flex = math.sin(self.bob_timer * 3) * 0.15 + 1.0
+        bob = math.sin(self.bob_timer) * 3
+        arm_flex = math.sin(self.bob_timer * 3) * 0.2 + 1.0
+        ex = 1 if self.facing_x >= 0 else -1
 
         # Aura glow
         if self.has_aura:
@@ -576,64 +577,115 @@ class Player:
                 a = self.orbit_angle + (2 * math.pi * i / self.orbit_count)
                 ox = sx + math.cos(a) * self.orbit_radius
                 oy = sy + math.sin(a) * self.orbit_radius
-                pygame.draw.circle(surface, CYAN, (int(ox), int(oy)), 6)
-                pygame.draw.circle(surface, WHITE, (int(ox), int(oy)), 6, 1)
+                pygame.draw.circle(surface, CYAN, (int(ox), int(oy)), 7)
+                pygame.draw.circle(surface, WHITE, (int(ox), int(oy)), 7, 1)
+
+        # Wake/splash behind boat
+        for i in range(4):
+            wx = sx - ex * (16 + i * 8)
+            wy = int(sy + bob + 8 + random.randint(-2, 2))
+            wa = max(0, 100 - i * 25)
+            ws = pygame.Surface((10, 6), pygame.SRCALPHA)
+            pygame.draw.ellipse(ws, (180, 210, 240, wa), (0, 0, 10, 6))
+            surface.blit(ws, (wx - 5, wy - 3))
 
         # Dash ghost trail
         if self.dash_timer > 0:
-            for i in range(3):
-                gx = sx - self.dash_dx * (i + 1) * 8
-                gy = sy + bob - self.dash_dy * (i + 1) * 8
-                ghost = pygame.Surface((40, 30), pygame.SRCALPHA)
-                a = 80 - i * 25
-                pygame.draw.ellipse(ghost, (*self.char_color, a), (2, 4, 36, 22))
-                surface.blit(ghost, (int(gx) - 20, int(gy) - 15))
+            for i in range(4):
+                gx = sx - self.dash_dx * (i + 1) * 10
+                gy = sy + bob - self.dash_dy * (i + 1) * 10
+                ghost = pygame.Surface((50, 30), pygame.SRCALPHA)
+                a = 90 - i * 22
+                pygame.draw.ellipse(ghost, (*self.char_color, a), (2, 4, 46, 22))
+                surface.blit(ghost, (int(gx) - 25, int(gy) - 15))
 
         blink = self.invuln_timer > 0 and int(self.invuln_timer * 10) % 2
         if not blink:
             by = int(sy + bob)
-            # === BOAT HULL (oval) ===
-            hull_rect = pygame.Rect(sx - 18, by - 10, 36, 20)
-            pygame.draw.ellipse(surface, self.char_color, hull_rect)
-            pygame.draw.ellipse(surface, WHITE, hull_rect, 2)
-            # Bow (front point)
-            ex = 1 if self.facing_x >= 0 else -1
-            bow_x = sx + 20 * ex
-            pygame.draw.polygon(surface, self.char_color,
-                                [(sx + 16 * ex, by - 6), (bow_x, by), (sx + 16 * ex, by + 6)])
-            # Cabin
-            cab_x = sx - 5 * ex
-            pygame.draw.rect(surface, tuple(min(c + 30, 255) for c in self.char_color),
-                             (cab_x - 5, by - 16, 10, 8))
-            pygame.draw.rect(surface, WHITE, (cab_x - 5, by - 16, 10, 8), 1)
+            cc = self.char_color
+            lighter = tuple(min(c + 40, 255) for c in cc)
+            darker = tuple(max(c - 40, 0) for c in cc)
+
+            # === BOAT HULL ===
+            # Main hull (rounded shape)
+            hull_pts = [
+                (sx - 22 * ex, by + 10), (sx - 20 * ex, by - 8),
+                (sx - 10 * ex, by - 12), (sx + 5 * ex, by - 12),
+                (sx + 20 * ex, by - 6), (sx + 26 * ex, by),
+                (sx + 20 * ex, by + 8), (sx - 5 * ex, by + 12),
+                (sx - 22 * ex, by + 10)]
+            pygame.draw.polygon(surface, cc, hull_pts)
+            pygame.draw.polygon(surface, WHITE, hull_pts, 2)
+            # Hull stripe
+            pygame.draw.line(surface, lighter,
+                             (sx - 20 * ex, by + 2), (sx + 22 * ex, by + 2), 2)
+            # Bow highlight
+            pygame.draw.line(surface, WHITE,
+                             (sx + 22 * ex, by - 4), (sx + 26 * ex, by), 2)
+
+            # Cabin / wheelhouse
+            cab_w, cab_h = 14, 12
+            cab_x = sx - 8 * ex
+            pygame.draw.rect(surface, lighter,
+                             (cab_x - cab_w // 2, by - 12 - cab_h, cab_w, cab_h))
+            pygame.draw.rect(surface, WHITE,
+                             (cab_x - cab_w // 2, by - 12 - cab_h, cab_w, cab_h), 1)
+            # Window
+            pygame.draw.rect(surface, (140, 200, 240),
+                             (cab_x - 3, by - 12 - cab_h + 3, 6, 4))
+            # Smokestack
+            pygame.draw.rect(surface, darker,
+                             (cab_x - 2, by - 12 - cab_h - 6, 4, 6))
+            # Smoke puffs
+            smoke_off = int(self.bob_timer * 5) % 20
+            for i in range(3):
+                sa = max(0, 60 - i * 20 - smoke_off)
+                ssurf = pygame.Surface((12, 12), pygame.SRCALPHA)
+                pygame.draw.circle(ssurf, (200, 200, 210, sa), (6, 6), 4 + i)
+                surface.blit(ssurf, (cab_x - 6, by - 12 - cab_h - 12 - i * 6 - smoke_off))
 
             # === MUSCULAR ARMS ===
-            skin = (215, 170, 120)
-            skin_dark = (180, 140, 95)
-            # Left arm
-            ls = (sx - 16, by - 2)
-            le = (sx - 26, int(by - 10 * arm_flex))
-            lh = (sx - 30, int(by - 18 * arm_flex))
-            pygame.draw.line(surface, skin_dark, ls, le, int(6 * arm_flex))
-            pygame.draw.circle(surface, skin, ((ls[0]+le[0])//2, (ls[1]+le[1])//2),
-                               int(4 * arm_flex))
-            pygame.draw.line(surface, skin_dark, le, lh, 4)
-            pygame.draw.circle(surface, skin, lh, 4)
-            # Right arm
-            rs = (sx + 16, by - 2)
-            re = (sx + 26, int(by - 10 * arm_flex))
-            rh = (sx + 30, int(by - 18 * arm_flex))
-            pygame.draw.line(surface, skin_dark, rs, re, int(6 * arm_flex))
-            pygame.draw.circle(surface, skin, ((rs[0]+re[0])//2, (rs[1]+re[1])//2),
-                               int(4 * arm_flex))
-            pygame.draw.line(surface, skin_dark, re, rh, 4)
-            pygame.draw.circle(surface, skin, rh, 4)
+            skin = (220, 175, 130)
+            skin_dk = (185, 145, 100)
+            skin_hi = (240, 200, 160)
+            bicep_r = int(6 * arm_flex)
 
-            # === EYES ===
-            pygame.draw.circle(surface, WHITE, (sx - 4 * ex, by - 4), 4)
-            pygame.draw.circle(surface, WHITE, (sx + 6 * ex, by - 4), 4)
-            pygame.draw.circle(surface, BLACK, (sx - 3 * ex, by - 4), 2)
-            pygame.draw.circle(surface, BLACK, (sx + 7 * ex, by - 4), 2)
+            # Left arm
+            ls = (sx - 20, by - 4)
+            le = (sx - 32, int(by - 14 * arm_flex))
+            lh = (sx - 36, int(by - 24 * arm_flex))
+            pygame.draw.line(surface, skin_dk, ls, le, int(7 * arm_flex))
+            pygame.draw.circle(surface, skin, ((ls[0]+le[0])//2, (ls[1]+le[1])//2), bicep_r)
+            pygame.draw.circle(surface, skin_hi, ((ls[0]+le[0])//2 - 1, (ls[1]+le[1])//2 - 2),
+                               max(1, bicep_r - 2))
+            pygame.draw.line(surface, skin_dk, le, lh, 5)
+            pygame.draw.circle(surface, skin, lh, 5)
+
+            # Right arm
+            rs = (sx + 20, by - 4)
+            re = (sx + 32, int(by - 14 * arm_flex))
+            rh = (sx + 36, int(by - 24 * arm_flex))
+            pygame.draw.line(surface, skin_dk, rs, re, int(7 * arm_flex))
+            pygame.draw.circle(surface, skin, ((rs[0]+re[0])//2, (rs[1]+re[1])//2), bicep_r)
+            pygame.draw.circle(surface, skin_hi, ((rs[0]+re[0])//2 + 1, (rs[1]+re[1])//2 - 2),
+                               max(1, bicep_r - 2))
+            pygame.draw.line(surface, skin_dk, re, rh, 5)
+            pygame.draw.circle(surface, skin, rh, 5)
+
+            # === FACE ===
+            # Eyes (larger, more expressive)
+            pygame.draw.circle(surface, WHITE, (sx - 5 * ex, by - 5), 5)
+            pygame.draw.circle(surface, WHITE, (sx + 7 * ex, by - 5), 5)
+            pygame.draw.circle(surface, BLACK, (sx - 4 * ex, by - 5), 3)
+            pygame.draw.circle(surface, BLACK, (sx + 8 * ex, by - 5), 3)
+            # Eyebrows (determined look)
+            pygame.draw.line(surface, darker,
+                             (sx - 9 * ex, by - 10), (sx - 1 * ex, by - 9), 2)
+            pygame.draw.line(surface, darker,
+                             (sx + 3 * ex, by - 9), (sx + 11 * ex, by - 10), 2)
+            # Smile
+            pygame.draw.arc(surface, darker,
+                            (sx - 5, by - 1, 10, 6), 3.14, 6.28, 2)
 
         # Dash cooldown indicator
         if self.dash_cooldown_timer > 0:
@@ -646,7 +698,7 @@ class Enemy:
     def __init__(self, x, y, wave):
         self.x, self.y = x, y
         self.radius = ENEMY_RADIUS + random.randint(-2, 4)
-        scale = 1 + wave * 0.15
+        scale = 1 + wave * 0.08
         self.max_hp = int(ENEMY_BASE_HP * scale)
         self.hp = self.max_hp
         self.speed = ENEMY_BASE_SPEED + random.uniform(-0.2, 0.3) + wave * 0.05
@@ -689,41 +741,62 @@ class Enemy:
 
     def draw(self, surface, cam_x, cam_y):
         sx, sy = int(self.x - cam_x), int(self.y - cam_y)
-        bob = math.sin(self.anim_timer) * 2
+        bob = math.sin(self.anim_timer) * 3
+        tail_wag = math.sin(self.anim_timer * 2) * 4
         sy_b = int(sy + bob)
         color = WHITE if self.hit_flash > 0 else self.color
         r = self.radius
+        lighter = tuple(min(c + 50, 255) for c in self.color)
+        darker = tuple(max(c - 40, 0) for c in self.color)
+
         # === FISH BODY ===
-        pygame.draw.ellipse(surface, color, (sx - r, sy_b - r // 2, r * 2, r))
-        pygame.draw.ellipse(surface, BLACK, (sx - r, sy_b - r // 2, r * 2, r), 2)
-        # Tail fin
-        pygame.draw.polygon(surface, color, [
-            (sx - r, sy_b), (sx - r - 8, sy_b - 6), (sx - r - 8, sy_b + 6)])
+        # Tail fin (behind body)
+        pygame.draw.polygon(surface, darker, [
+            (sx - r + 2, sy_b),
+            (sx - r - 10, int(sy_b - 8 + tail_wag)),
+            (sx - r - 10, int(sy_b + 8 + tail_wag))])
+        # Main body (ellipse)
+        body_rect = pygame.Rect(sx - r, sy_b - r * 2 // 3, r * 2, r * 4 // 3)
+        pygame.draw.ellipse(surface, color, body_rect)
+        # Belly (lighter underside)
+        belly_rect = pygame.Rect(sx - r + 3, sy_b, r * 2 - 6, r * 2 // 3 - 2)
+        pygame.draw.ellipse(surface, lighter, belly_rect)
+        # Body outline
+        pygame.draw.ellipse(surface, BLACK, body_rect, 2)
+        # Dorsal fin
+        pygame.draw.polygon(surface, darker, [
+            (sx - 2, sy_b - r * 2 // 3),
+            (sx - 6, sy_b - r - 4),
+            (sx + 4, sy_b - r * 2 // 3)])
+
         if self.variant == "tank":
             # Pufferfish spikes
-            for i in range(8):
-                a = self.anim_timer * 0.5 + i * math.pi / 4
-                spx = sx + math.cos(a) * (r + 4)
-                spy = sy_b + math.sin(a) * (r + 4)
-                pygame.draw.line(surface, color, (sx + int(math.cos(a) * r),
-                                 sy_b + int(math.sin(a) * r // 2)),
+            for i in range(10):
+                a = self.anim_timer * 0.3 + i * math.pi / 5
+                spx = sx + math.cos(a) * (r + 3)
+                spy = sy_b + math.sin(a) * (r * 2 // 3 + 2)
+                pygame.draw.line(surface, darker,
+                                 (sx + int(math.cos(a) * r),
+                                  sy_b + int(math.sin(a) * r * 2 // 3)),
                                  (int(spx), int(spy)), 2)
         if self.variant == "fast":
-            # Swordfish nose
-            pygame.draw.line(surface, color, (sx + r, sy_b),
-                             (sx + r + 12, sy_b), 3)
-            pygame.draw.line(surface, WHITE, (sx + r, sy_b),
-                             (sx + r + 12, sy_b), 1)
+            # Swordfish nose blade
+            pygame.draw.polygon(surface, lighter, [
+                (sx + r, sy_b - 2), (sx + r + 14, sy_b), (sx + r, sy_b + 2)])
+            pygame.draw.line(surface, WHITE, (sx + r, sy_b), (sx + r + 14, sy_b), 1)
+
         # Eye
-        pygame.draw.circle(surface, YELLOW, (sx + r // 2, sy_b - 2), 3)
-        pygame.draw.circle(surface, BLACK, (sx + r // 2, sy_b - 2), 1)
+        pygame.draw.circle(surface, WHITE, (sx + r // 2, sy_b - r // 4), 4)
+        pygame.draw.circle(surface, BLACK, (sx + r // 2 + 1, sy_b - r // 4), 2)
         # Mouth
-        pygame.draw.line(surface, BLACK, (sx + r - 2, sy_b + 2),
-                         (sx + r + 2, sy_b + 1), 2)
+        pygame.draw.arc(surface, BLACK,
+                        (sx + r - 5, sy_b - 1, 8, 6), 3.14, 6.28, 2)
+
         # HP bar
         if self.hp < self.max_hp:
-            draw_bar(surface, sx - r, sy_b - r // 2 - 8,
-                     r * 2, 4, self.hp / self.max_hp, RED)
+            bw = max(20, r * 2)
+            draw_bar(surface, sx - bw // 2, sy_b - r - 10,
+                     bw, 4, self.hp / self.max_hp, RED)
 
 
 class Boss(Enemy):
@@ -1360,7 +1433,7 @@ class Game:
             self.wave_timer = 0
             self.wave += 1
             self.spawn_rate = max(MIN_SPAWN_RATE,
-                                  int(INITIAL_SPAWN_RATE * (0.8 ** self.wave)))
+                                  int(INITIAL_SPAWN_RATE * (0.9 ** self.wave)))
             self.boss_spawned_this_wave = False
 
         if (self.wave > 0 and self.wave % BOSS_WAVE_INTERVAL == 0
@@ -1371,7 +1444,7 @@ class Game:
         self.spawn_timer += 1
         if self.spawn_timer >= self.spawn_rate:
             self.spawn_timer = 0
-            for _ in range(1 + self.wave // 2):
+            for _ in range(1 + self.wave // 3):
                 self.spawn_enemy()
 
         self.chest_timer += 1
@@ -1463,22 +1536,32 @@ class Game:
 
     def draw_hud(self):
         p = self.player
-        draw_bar(self.screen, 10, 10, 200, 18, p.hp / p.max_hp, RED, DARK_RED)
-        draw_text(self.screen, f"HP {p.hp}/{p.max_hp}", 14, 15, 11)
-        draw_bar(self.screen, 10, 34, 200, 12, p.xp / p.xp_to_next, BLUE, GRAY)
-        draw_text(self.screen, f"Lv {p.level}", 13, 15, 33)
-        draw_text(self.screen, f"Gold: {p.gold}", 14, 15, 52, GOLD)
+        # Semi-transparent HUD background panels
+        left_panel = pygame.Surface((220, 100), pygame.SRCALPHA)
+        left_panel.fill((0, 0, 0, 100))
+        self.screen.blit(left_panel, (5, 5))
+        right_panel = pygame.Surface((150, 75), pygame.SRCALPHA)
+        right_panel.fill((0, 0, 0, 100))
+        self.screen.blit(right_panel, (SCREEN_W - 155, 5))
+
+        # HP bar (rounded feel)
+        draw_bar(self.screen, 12, 12, 204, 20, p.hp / p.max_hp, RED, DARK_RED)
+        draw_text(self.screen, f"HP {p.hp}/{p.max_hp}", 14, 16, 14)
+        # XP bar
+        draw_bar(self.screen, 12, 38, 204, 14, p.xp / p.xp_to_next, (40, 100, 220), GRAY)
+        draw_text(self.screen, f"Lv {p.level}", 13, 16, 38)
+        # Gold with icon
+        draw_text(self.screen, f"Gold: {p.gold}", 15, 14, 58, GOLD)
+        # Weapon
+        draw_text(self.screen, f"Weapon: {p.weapon.capitalize()}", 12, 14, 78, LIGHT_GRAY)
+        draw_text(self.screen, "SPACE = dash", 11, 14, 92, GRAY)
 
         minutes = int(self.game_time) // 60
         seconds = int(self.game_time) % 60
-        draw_text(self.screen, f"Time  {minutes:02d}:{seconds:02d}", 16,
-                  SCREEN_W - 140, 10)
-        draw_text(self.screen, f"Wave  {self.wave + 1}", 16, SCREEN_W - 140, 30)
-        draw_text(self.screen, f"Kills {p.kills}", 16, SCREEN_W - 140, 50)
-
-        draw_text(self.screen, f"Weapon: {p.weapon.capitalize()}", 13,
-                  15, 70, LIGHT_GRAY)
-        draw_text(self.screen, "SPACE to dash", 11, 15, 88, GRAY)
+        draw_text(self.screen, f"{minutes:02d}:{seconds:02d}", 20,
+                  SCREEN_W - 145, 12, WHITE)
+        draw_text(self.screen, f"Wave {self.wave + 1}", 16, SCREEN_W - 145, 36)
+        draw_text(self.screen, f"Kills {p.kills}", 16, SCREEN_W - 145, 56, LIGHT_GRAY)
 
         if self.show_fps:
             draw_text(self.screen, f"FPS: {int(self.clock.get_fps())}", 14,
