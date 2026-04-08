@@ -10,7 +10,7 @@ import urllib.request
 import urllib.error
 
 GITHUB_OWNER = "skyeatsbrad"
-GITHUB_REPO = "Boaty-McBoaterson"
+GITHUB_REPO = "Boatry-McBoaterson"
 CURRENT_VERSION = "1.0.0"
 VERSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.txt")
 API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
