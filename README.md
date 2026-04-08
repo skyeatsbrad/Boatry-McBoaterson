@@ -92,17 +92,78 @@ A muscular boat survives waves of fish enemies on the open ocean. Vampire Surviv
 └── builds/              # Export output
 ```
 
-## Development
+## 📥 How to Install & Play
+
+### 🌐 iOS (iPhone / iPad)
+No install needed! Open this link in Safari:
+
+**[https://skyeatsbrad.github.io/Boatry-McBoaterson/](https://skyeatsbrad.github.io/Boatry-McBoaterson/)**
+
+To add it to your home screen like an app:
+1. Open the link in **Safari**
+2. Tap the **Share** button (box with arrow)
+3. Tap **"Add to Home Screen"**
+4. It now appears as an app icon — runs fullscreen, no browser bar
+
+### 🪟 Windows
+1. Go to [**Releases**](https://github.com/skyeatsbrad/Boatry-McBoaterson/releases)
+2. Download **`Survivor.zip`**
+3. Extract the zip (right-click → Extract All)
+4. Double-click **`Survivor.exe`** — that's it, single file, no install needed
+
+> First time only: if you get a "Bad Image" error, run **`Play Survivor.bat`** as administrator — it installs the Visual C++ runtime, then you can use `Survivor.exe` directly from then on.
+
+### 🤖 Android
+1. Go to [**Releases**](https://github.com/skyeatsbrad/Boatry-McBoaterson/releases) on your phone
+2. Download **`Survivor.apk`**
+3. Open the APK — if prompted, tap **"Settings"** and enable **"Install from unknown sources"** for your browser
+4. Tap **Install**
+5. Open **Boatry McBoaterson** from your app drawer
+
+> No Google Play Store needed. Works on any Android 6.0+ device.
+
+### 🎮 Steam Deck
+**Option A — Desktop Mode (easiest):**
+1. Switch to **Desktop Mode** (hold Power → Desktop Mode)
+2. Open the browser, go to [**Releases**](https://github.com/skyeatsbrad/Boatry-McBoaterson/releases)
+3. Download **`Survivor.x86_64`** (Linux build)
+4. Open a terminal (Konsole) and run:
+   ```bash
+   chmod +x ~/Downloads/Survivor.x86_64
+   ~/Downloads/Survivor.x86_64
+   ```
+
+**Option B — Add to Steam as Non-Steam Game:**
+1. Download `Survivor.x86_64` as above
+2. In Steam, click **"Add a Game"** → **"Add a Non-Steam Game"**
+3. Browse to `Survivor.x86_64` and add it
+4. Now it appears in your Steam library and works in **Gaming Mode** with controller support
+
+**Option C — Web version:**
+Just open the browser in Desktop Mode and go to the web link above.
+
+### 🌐 Any Device (Web Version)
+Works on anything with a browser — PC, Mac, Linux, Chromebook, tablet, phone:
+
+**[https://skyeatsbrad.github.io/Boatry-McBoaterson/](https://skyeatsbrad.github.io/Boatry-McBoaterson/)**
+
+No downloads, no installs, plays instantly.
+
+---
+
+## 🛠️ Development
 **Pygame version** (quick play):
 ```
 pip install pygame
 python game.py
 ```
 
-**Godot version** (full features):
+**Godot version** (for development/modding):
 1. Install [Godot 4.3+](https://godotengine.org/download)
 2. Open `godot/project.godot`
 3. Press F5 to run
+
+> **Note**: Players do NOT need Godot installed. The Releases page has pre-built standalone executables for each platform. Godot is only needed if you want to modify the game's source code.
 
 ## License
 Made with ❤️ by skyeatsbrad
