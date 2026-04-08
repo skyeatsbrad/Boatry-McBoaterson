@@ -1144,17 +1144,26 @@ class Gem:
         sx, sy = int(self.x - cam_x), int(self.y - cam_y)
         bob = math.sin(self.anim_timer) * 3
         sy_b = int(sy + bob)
-        # Brighter glow
+        # Blue crystal glow (like VS blue gems)
         glow = pygame.Surface((28, 28), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (50, 255, 50, 50), (14, 14), 14)
+        pygame.draw.circle(glow, (60, 120, 255, 50), (14, 14), 14)
         surface.blit(glow, (sx - 14, sy_b - 14))
         glow2 = pygame.Surface((16, 16), pygame.SRCALPHA)
-        pygame.draw.circle(glow2, (100, 255, 100, 80), (8, 8), 8)
+        pygame.draw.circle(glow2, (80, 160, 255, 80), (8, 8), 8)
         surface.blit(glow2, (sx - 8, sy_b - 8))
-        pts = [(sx, sy_b - self.radius - 1), (sx + self.radius + 1, sy_b),
-               (sx, sy_b + self.radius + 1), (sx - self.radius - 1, sy_b)]
-        pygame.draw.polygon(surface, GREEN, pts)
-        pygame.draw.polygon(surface, (150, 255, 150), pts, 2)
+        # Diamond shape (blue crystal)
+        r = self.radius + 1
+        pts = [(sx, sy_b - r - 2), (sx + r, sy_b),
+               (sx, sy_b + r), (sx - r, sy_b)]
+        pygame.draw.polygon(surface, (40, 100, 220), pts)
+        # Inner highlight
+        inner = [(sx, sy_b - r + 2), (sx + r - 3, sy_b),
+                 (sx, sy_b + r - 3), (sx - r + 3, sy_b)]
+        pygame.draw.polygon(surface, (80, 160, 255), inner)
+        # Sparkle
+        pygame.draw.polygon(surface, (180, 220, 255), pts, 2)
+        sparkle = int(3 + 2 * math.sin(self.anim_timer * 2))
+        pygame.draw.circle(surface, (200, 230, 255), (sx - 1, sy_b - r + 3), sparkle)
 
 
 class HealthPickup:
@@ -1817,33 +1826,72 @@ class Game:
                     foam = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
                     foam.fill((60, 90, 130, foam_a))
                     self.screen.blit(foam, (sx, sy))
-        # Sparse floating debris / bubbles
-        random.seed(42)
-        for _ in range(15):
+
+        # Floating debris: wood planks, barrels, seaweed (deterministic positions)
+        random.seed(1337)
+        for _ in range(60):
             dx = random.randint(0, WORLD_W)
             dy = random.randint(0, WORLD_H)
+            dtype = random.choice(["plank", "plank", "plank", "barrel", "seaweed", "seaweed", "crate"])
             dsx = dx - self.cam_x
-            dsy = dy - self.cam_y + math.sin(t * 0.5 + dx * 0.01) * 3
-            if -20 < dsx < SCREEN_W + 20 and -20 < dsy < SCREEN_H + 20:
-                ds = pygame.Surface((6, 6), pygame.SRCALPHA)
-                pygame.draw.circle(ds, (40, 70, 100, 30), (3, 3), 3)
-                self.screen.blit(ds, (int(dsx), int(dsy)))
+            dsy = dy - self.cam_y + math.sin(t * 0.4 + dx * 0.005) * 4
+            if -40 < dsx < SCREEN_W + 40 and -40 < dsy < SCREEN_H + 40:
+                dsx_i, dsy_i = int(dsx), int(dsy)
+                if dtype == "plank":
+                    rot = math.sin(dx * 0.01 + t * 0.2) * 0.3
+                    w, h = random.randint(20, 36), random.randint(5, 8)
+                    plank = pygame.Surface((w, h), pygame.SRCALPHA)
+                    c1 = (60 + random.randint(0, 30), 40 + random.randint(0, 20),
+                          20 + random.randint(0, 15))
+                    c2 = tuple(max(0, c - 15) for c in c1)
+                    plank.fill((*c1, 120))
+                    pygame.draw.line(plank, (*c2, 140), (2, h // 2), (w - 2, h // 2), 1)
+                    pygame.draw.rect(plank, (*c2, 80), (0, 0, w, h), 1)
+                    rotated = pygame.transform.rotate(plank, math.degrees(rot))
+                    self.screen.blit(rotated, (dsx_i - rotated.get_width() // 2,
+                                                dsy_i - rotated.get_height() // 2))
+                elif dtype == "barrel":
+                    bs = pygame.Surface((14, 16), pygame.SRCALPHA)
+                    pygame.draw.ellipse(bs, (80, 55, 30, 110), (0, 0, 14, 16))
+                    pygame.draw.ellipse(bs, (60, 40, 20, 80), (0, 0, 14, 16), 1)
+                    pygame.draw.line(bs, (90, 70, 40, 120), (1, 5), (13, 5), 1)
+                    pygame.draw.line(bs, (90, 70, 40, 120), (1, 11), (13, 11), 1)
+                    self.screen.blit(bs, (dsx_i - 7, dsy_i - 8))
+                elif dtype == "seaweed":
+                    sw = math.sin(t * 1.5 + dx * 0.02) * 6
+                    for seg in range(3):
+                        sx_s = dsx_i + int(sw * seg * 0.4)
+                        sy_s = dsy_i - seg * 5
+                        ss = pygame.Surface((8, 7), pygame.SRCALPHA)
+                        gc = (20 + random.randint(0, 20), 60 + random.randint(0, 30),
+                              15 + random.randint(0, 10))
+                        pygame.draw.ellipse(ss, (*gc, 80), (0, 0, 8, 7))
+                        self.screen.blit(ss, (sx_s - 4, sy_s))
+                elif dtype == "crate":
+                    cs = pygame.Surface((12, 12), pygame.SRCALPHA)
+                    cs.fill((70, 50, 25, 100))
+                    pygame.draw.rect(cs, (50, 35, 15, 120), (0, 0, 12, 12), 1)
+                    pygame.draw.line(cs, (50, 35, 15, 100), (0, 0), (12, 12), 1)
+                    pygame.draw.line(cs, (50, 35, 15, 100), (12, 0), (0, 12), 1)
+                    self.screen.blit(cs, (dsx_i - 6, dsy_i - 6))
         random.seed()
 
     def draw_minimap(self):
         mm = pygame.Surface((MINIMAP_SIZE, MINIMAP_SIZE), pygame.SRCALPHA)
-        mm.fill((0, 0, 0, 120))
+        mm.fill((0, 0, 0, 140))
         sx = MINIMAP_SIZE / WORLD_W
         sy = MINIMAP_SIZE / WORLD_H
         pygame.draw.circle(mm, WHITE,
-                           (int(self.player.x * sx), int(self.player.y * sy)), 2)
+                           (int(self.player.x * sx), int(self.player.y * sy)), 3)
         for e in self.enemies:
             c = GOLD if e.is_boss else RED
             sz = 2 if e.is_boss else 1
             pygame.draw.circle(mm, c, (int(e.x * sx), int(e.y * sy)), sz)
         for ch in self.chests:
             pygame.draw.circle(mm, GOLD, (int(ch.x * sx), int(ch.y * sy)), 2)
-        pygame.draw.rect(mm, LIGHT_GRAY, (0, 0, MINIMAP_SIZE, MINIMAP_SIZE), 1)
+        # Gold ornate border
+        pygame.draw.rect(mm, (120, 90, 30), (0, 0, MINIMAP_SIZE, MINIMAP_SIZE), 2)
+        pygame.draw.rect(mm, GOLD, (1, 1, MINIMAP_SIZE - 2, MINIMAP_SIZE - 2), 1)
         self.screen.blit(mm, (SCREEN_W - MINIMAP_SIZE - MINIMAP_MARGIN,
                               SCREEN_H - MINIMAP_SIZE - MINIMAP_MARGIN))
 
@@ -1852,10 +1900,11 @@ class Game:
         t = pygame.time.get_ticks() / 1000.0
 
         # === TOP-LEFT: Level & stats panel ===
-        left_panel = pygame.Surface((230, 70), pygame.SRCALPHA)
+        panel_h = 95  # taller panel for weapon icons
+        left_panel = pygame.Surface((230, panel_h), pygame.SRCALPHA)
         left_panel.fill((0, 0, 0, 140))
         self.screen.blit(left_panel, (5, 5))
-        pygame.draw.rect(self.screen, (80, 60, 30), (5, 5, 230, 70), 2)
+        pygame.draw.rect(self.screen, (80, 60, 30), (5, 5, 230, panel_h), 2)
 
         # XP bar (thin, glowing)
         xp_ratio = p.xp / p.xp_to_next
@@ -1866,12 +1915,63 @@ class Game:
         pygame.draw.rect(self.screen, (100, 80, 40), (12, 12, 214, 12), 1)
         draw_text(self.screen, f"Lv {p.level}", 14, 16, 10, GOLD)
 
-        # Gold
-        draw_text(self.screen, f"Gold: {p.gold}", 16, 14, 30, GOLD)
-        # Weapon
-        draw_text(self.screen, f"{p.weapon.upper()}", 13, 14, 50, LIGHT_GRAY)
+        # Gold (with coin icon)
+        pygame.draw.circle(self.screen, GOLD, (24, 38), 7)
+        pygame.draw.circle(self.screen, (200, 160, 30), (24, 38), 7, 1)
+        draw_text(self.screen, "$", 10, 24, 38, (120, 80, 20), center=True)
+        draw_text(self.screen, f"{p.gold}", 16, 36, 30, GOLD)
+
+        # Weapon icons row (like VS: small icons showing equipped abilities)
+        icon_y = 52
+        icon_x = 14
+        # Main weapon icon
+        wc = {
+            "projectile": (255, 200, 60),
+            "lightning": (60, 200, 255),
+            "boomerang": (0, 170, 170),
+        }.get(p.weapon, WHITE)
+        # Weapon icon box
+        pygame.draw.rect(self.screen, (30, 25, 40), (icon_x, icon_y, 22, 22))
+        pygame.draw.rect(self.screen, wc, (icon_x, icon_y, 22, 22), 1)
+        if p.weapon == "projectile":
+            pygame.draw.circle(self.screen, wc, (icon_x + 11, icon_y + 11), 6)
+            pygame.draw.circle(self.screen, WHITE, (icon_x + 11, icon_y + 11), 3)
+        elif p.weapon == "lightning":
+            pygame.draw.polygon(self.screen, wc, [
+                (icon_x + 9, icon_y + 3), (icon_x + 5, icon_y + 12),
+                (icon_x + 10, icon_y + 12), (icon_x + 13, icon_y + 19),
+                (icon_x + 17, icon_y + 10), (icon_x + 12, icon_y + 10)])
+        elif p.weapon == "boomerang":
+            pygame.draw.arc(self.screen, wc,
+                            (icon_x + 3, icon_y + 3, 16, 16), 0.5, 4.5, 3)
+        icon_x += 26
+
+        # Extra ability icons
+        if p.has_orbit:
+            pygame.draw.rect(self.screen, (30, 25, 40), (icon_x, icon_y, 22, 22))
+            pygame.draw.rect(self.screen, CYAN, (icon_x, icon_y, 22, 22), 1)
+            pygame.draw.circle(self.screen, CYAN, (icon_x + 11, icon_y + 11), 7, 2)
+            pygame.draw.circle(self.screen, CYAN, (icon_x + 11, icon_y + 5), 3)
+            icon_x += 26
+        if p.has_aura:
+            pygame.draw.rect(self.screen, (30, 25, 40), (icon_x, icon_y, 22, 22))
+            pygame.draw.rect(self.screen, PURPLE, (icon_x, icon_y, 22, 22), 1)
+            pygame.draw.circle(self.screen, PURPLE, (icon_x + 11, icon_y + 11), 8, 2)
+            pygame.draw.circle(self.screen, PURPLE, (icon_x + 11, icon_y + 11), 4, 1)
+            icon_x += 26
+        if p.has_explosion:
+            pygame.draw.rect(self.screen, (30, 25, 40), (icon_x, icon_y, 22, 22))
+            pygame.draw.rect(self.screen, ORANGE, (icon_x, icon_y, 22, 22), 1)
+            for ei in range(5):
+                ea = ei * math.pi * 2 / 5
+                ex_i = icon_x + 11 + int(math.cos(ea) * 6)
+                ey_i = icon_y + 11 + int(math.sin(ea) * 6)
+                pygame.draw.circle(self.screen, ORANGE, (ex_i, ey_i), 2)
+            pygame.draw.circle(self.screen, FIRE_BRIGHT, (icon_x + 11, icon_y + 11), 3)
+            icon_x += 26
+
         # Dash hint
-        draw_text(self.screen, "SPACE=dash", 10, 140, 52, GRAY)
+        draw_text(self.screen, "SPACE=dash", 10, 14, 80, GRAY)
 
         # === TOP-RIGHT: Timer & wave ===
         right_panel = pygame.Surface((160, 70), pygame.SRCALPHA)
@@ -2020,37 +2120,114 @@ class Game:
 
     def draw_char_select(self):
         self.screen.fill(OCEAN_DEEP)
-        draw_text(self.screen, "SELECT CHARACTER", 36,
-                  SCREEN_W // 2, 60, GOLD, center=True)
-        box_w, box_h = 220, 180
+        t = pygame.time.get_ticks() / 1000.0
+        # Animated bg
+        for y in range(0, SCREEN_H, 40):
+            wave = math.sin(y * 0.02 + t * 0.3) * 0.5 + 0.5
+            c = (int(8 + wave * 6), int(12 + wave * 10), int(28 + wave * 15))
+            pygame.draw.rect(self.screen, c, (0, y, SCREEN_W, 40))
+        # Ornate title
+        for ox, oy in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
+            draw_text(self.screen, "SELECT YOUR VESSEL", 36,
+                      SCREEN_W // 2 + ox, 50 + oy, (40, 20, 10), center=True)
+        draw_text(self.screen, "SELECT YOUR VESSEL", 36,
+                  SCREEN_W // 2, 50, GOLD, center=True)
+
+        box_w, box_h = 240, 280
         total_w = len(CHARACTERS) * (box_w + 20)
         start_x = SCREEN_W // 2 - total_w // 2 + 10
         for i, ch in enumerate(CHARACTERS):
             bx = start_x + i * (box_w + 20)
-            by = 130
+            by = 100
             selected = i == self.char_idx
-            border = WHITE if selected else GRAY
-            pygame.draw.rect(self.screen, (40, 40, 55), (bx, by, box_w, box_h))
-            pygame.draw.rect(self.screen, border, (bx, by, box_w, box_h),
-                             3 if selected else 1)
-            pygame.draw.rect(self.screen, ch["color"], (bx, by, box_w, 4))
-            cx, cy = bx + box_w // 2, by + 50
-            pygame.draw.circle(self.screen, ch["color"], (cx, cy), 20)
-            pygame.draw.circle(self.screen, WHITE, (cx, cy), 20, 2)
-            pygame.draw.circle(self.screen, WHITE, (cx - 5, cy - 4), 4)
-            pygame.draw.circle(self.screen, WHITE, (cx + 5, cy - 4), 4)
-            draw_text(self.screen, ch["name"], 22,
-                      bx + box_w // 2, by + 90, ch["color"], center=True)
-            draw_text(self.screen, ch["desc"], 12,
-                      bx + box_w // 2, by + 115, LIGHT_GRAY, center=True)
-            stats = (f"HP:{ch['hp_mod']:.0%} SPD:{ch['spd_mod']:.0%} "
-                     f"DMG:{ch['dmg_mod']:.0%}")
-            draw_text(self.screen, stats, 11,
-                      bx + box_w // 2, by + 140, GRAY, center=True)
-            draw_text(self.screen, f"Weapon: {ch['weapon']}", 11,
-                      bx + box_w // 2, by + 158, GRAY, center=True)
+
+            # Card background
+            card = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+            card.fill((15, 10, 25, 220))
+            self.screen.blit(card, (bx, by))
+
+            # Border (gold if selected)
+            bc = GOLD if selected else (80, 60, 30)
+            pygame.draw.rect(self.screen, bc, (bx, by, box_w, box_h), 3)
+            pygame.draw.rect(self.screen, (60, 45, 20),
+                             (bx + 4, by + 4, box_w - 8, box_h - 8), 1)
+            # Color accent strip
+            pygame.draw.rect(self.screen, ch["color"],
+                             (bx + 6, by + 6, box_w - 12, 4))
+
+            # Draw a mini boat preview
+            cx, cy = bx + box_w // 2, by + 80
+            cc = ch["color"]
+            bob = math.sin(t * 2 + i) * 3
+            cy_b = int(cy + bob)
+            # Hull
+            hull = [(cx - 22, cy_b + 10), (cx - 20, cy_b - 8),
+                    (cx - 10, cy_b - 14), (cx + 10, cy_b - 14),
+                    (cx + 22, cy_b - 6), (cx + 28, cy_b),
+                    (cx + 22, cy_b + 10)]
+            pygame.draw.polygon(self.screen, cc, hull)
+            # Red stripe
+            pygame.draw.line(self.screen, HULL_RED,
+                             (cx - 20, cy_b + 3), (cx + 24, cy_b + 3), 2)
+            pygame.draw.polygon(self.screen, BLACK, hull, 2)
+            # Cabin
+            pygame.draw.rect(self.screen, (200, 195, 190),
+                             (cx - 12, cy_b - 14 - 12, 16, 12))
+            pygame.draw.rect(self.screen, BLACK,
+                             (cx - 12, cy_b - 14 - 12, 16, 12), 1)
+            # Window
+            pygame.draw.rect(self.screen, (100, 170, 240),
+                             (cx - 6, cy_b - 14 - 8, 5, 4))
+            # Smokestack
+            pygame.draw.rect(self.screen, (80, 75, 70),
+                             (cx - 5, cy_b - 14 - 20, 5, 8))
+            # Eyes
+            pygame.draw.circle(self.screen, EYE_GLOW, (cx - 4, cy_b - 6), 4)
+            pygame.draw.circle(self.screen, EYE_GLOW, (cx + 6, cy_b - 6), 4)
+            pygame.draw.circle(self.screen, (255, 200, 80), (cx - 3, cy_b - 7), 2)
+            pygame.draw.circle(self.screen, (255, 200, 80), (cx + 7, cy_b - 7), 2)
+            # Arms
+            pygame.draw.line(self.screen, (210, 165, 120),
+                             (cx - 20, cy_b - 4), (cx - 32, cy_b - 18), 5)
+            pygame.draw.circle(self.screen, (210, 165, 120), (cx - 32, cy_b - 18), 5)
+            pygame.draw.line(self.screen, (210, 165, 120),
+                             (cx + 20, cy_b - 4), (cx + 32, cy_b - 18), 5)
+            pygame.draw.circle(self.screen, (210, 165, 120), (cx + 32, cy_b - 18), 5)
+
+            # Selection glow
+            if selected:
+                gs = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+                gs.fill((255, 200, 60, 10))
+                self.screen.blit(gs, (bx, by))
+
+            # Character info
+            for ox, oy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                draw_text(self.screen, ch["name"], 24,
+                          bx + box_w // 2 + ox, by + 140 + oy, (10, 5, 5), center=True)
+            draw_text(self.screen, ch["name"], 24,
+                      bx + box_w // 2, by + 140, ch["color"], center=True)
+            draw_text(self.screen, ch["desc"], 13,
+                      bx + box_w // 2, by + 170, LIGHT_GRAY, center=True)
+            # Stat bars
+            stats_y = by + 195
+            for label, val, color in [("HP", ch['hp_mod'], RED),
+                                       ("SPD", ch['spd_mod'], CYAN),
+                                       ("DMG", ch['dmg_mod'], ORANGE)]:
+                draw_text(self.screen, label, 11, bx + 15, stats_y, GRAY)
+                bar_w_s = int(140 * val)
+                pygame.draw.rect(self.screen, (30, 20, 20),
+                                 (bx + 50, stats_y + 2, 140, 8))
+                pygame.draw.rect(self.screen, color,
+                                 (bx + 50, stats_y + 2, bar_w_s, 8))
+                pygame.draw.rect(self.screen, (80, 60, 30),
+                                 (bx + 50, stats_y + 2, 140, 8), 1)
+                stats_y += 18
+
+            draw_text(self.screen, f"Weapon: {ch['weapon'].upper()}", 12,
+                      bx + box_w // 2, by + box_h - 30, GOLD, center=True)
+
         draw_text(self.screen, "Left/Right to choose, Enter to confirm, Esc back",
-                  14, SCREEN_W // 2, SCREEN_H - 40, GRAY, center=True)
+                  14, SCREEN_W // 2, SCREEN_H - 30, GRAY, center=True)
 
     def draw_shop(self):
         self.screen.fill(OCEAN_DEEP)
@@ -2151,30 +2328,173 @@ class Game:
 
     def draw_levelup(self):
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 160))
+        overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
-        draw_text(self.screen, f"LEVEL UP!  (Lv {self.player.level})", 36,
-                  SCREEN_W // 2, 100, GOLD, center=True)
-        draw_text(self.screen, "Choose a power-up:", 20,
-                  SCREEN_W // 2, 150, LIGHT_GRAY, center=True)
-        box_w, box_h = 280, 90
-        total = len(self.pending_powerups) * (box_w + 20)
-        start_x = SCREEN_W // 2 - total // 2 + 10
+        t = pygame.time.get_ticks() / 1000.0
+
+        # === ORNATE "LEVEL UP" BANNER ===
+        banner_w, banner_h = 340, 55
+        bx = SCREEN_W // 2 - banner_w // 2
+        by_b = 65
+        # Banner background (dark with gold)
+        banner = pygame.Surface((banner_w, banner_h), pygame.SRCALPHA)
+        banner.fill((20, 12, 8, 220))
+        self.screen.blit(banner, (bx, by_b))
+        # Gold border with corner details
+        pygame.draw.rect(self.screen, GOLD, (bx, by_b, banner_w, banner_h), 3)
+        pygame.draw.rect(self.screen, (180, 140, 30),
+                         (bx + 3, by_b + 3, banner_w - 6, banner_h - 6), 1)
+        # Corner gems
+        for cx, cy in [(bx + 8, by_b + 8), (bx + banner_w - 8, by_b + 8),
+                       (bx + 8, by_b + banner_h - 8), (bx + banner_w - 8, by_b + banner_h - 8)]:
+            pygame.draw.circle(self.screen, (200, 50, 30), (cx, cy), 4)
+            pygame.draw.circle(self.screen, (255, 100, 80), (cx - 1, cy - 1), 2)
+        # Text with outline
+        for ox, oy in [(-2, -2), (2, -2), (-2, 2), (2, 2), (-1, 0), (1, 0), (0, -1), (0, 1)]:
+            draw_text(self.screen, "LEVEL UP", 38,
+                      SCREEN_W // 2 + ox, by_b + banner_h // 2 + oy, (60, 30, 10), center=True)
+        draw_text(self.screen, "LEVEL UP", 38,
+                  SCREEN_W // 2, by_b + banner_h // 2, GOLD, center=True)
+
+        # Level indicator bar
+        lv_w = 140
+        lv_x = SCREEN_W // 2 - lv_w // 2
+        lv_y = by_b + banner_h + 8
+        pygame.draw.rect(self.screen, (60, 20, 15), (lv_x, lv_y, lv_w, 22))
+        pygame.draw.rect(self.screen, (120, 40, 30), (lv_x, lv_y, lv_w, 22), 2)
+        draw_text(self.screen, f"LAN {self.player.level}", 14,
+                  SCREEN_W // 2, lv_y + 11, GOLD, center=True)
+
+        # === POWER-UP CARDS ===
+        box_w, box_h = 240, 160
+        gap = 24
+        total = len(self.pending_powerups) * box_w + (len(self.pending_powerups) - 1) * gap
+        start_x = SCREEN_W // 2 - total // 2
+        card_top = lv_y + 40
         mx, my = pygame.mouse.get_pos()
         self.hovered_powerup = -1
+
         for i, pu in enumerate(self.pending_powerups):
-            bx = start_x + i * (box_w + 20)
-            by = 200
-            hovered = bx <= mx <= bx + box_w and by <= my <= by + box_h
+            cx = start_x + i * (box_w + gap)
+            cy = card_top
+            hovered = cx <= mx <= cx + box_w and cy <= my <= cy + box_h
             if hovered:
                 self.hovered_powerup = i
-            border = WHITE if hovered else GRAY
-            pygame.draw.rect(self.screen, (40, 40, 55), (bx, by, box_w, box_h))
-            pygame.draw.rect(self.screen, border, (bx, by, box_w, box_h), 2)
-            pygame.draw.rect(self.screen, pu["color"], (bx, by, box_w, 4))
-            draw_text(self.screen, f"[{i+1}]  {pu['name']}", 20,
-                      bx + 10, by + 15, pu["color"])
-            draw_text(self.screen, pu["desc"], 15, bx + 10, by + 50, LIGHT_GRAY)
+
+            # Card background
+            card = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+            card.fill((15, 10, 25, 230))
+            self.screen.blit(card, (cx, cy))
+
+            # Card inner region (darker with color tint)
+            inner_m = 6
+            inner_rect = (cx + inner_m, cy + inner_m,
+                          box_w - inner_m * 2, box_h - inner_m * 2)
+            tint = tuple(max(0, c // 6) for c in pu["color"])
+            pygame.draw.rect(self.screen, (tint[0] + 15, tint[1] + 10, tint[2] + 20),
+                             inner_rect)
+
+            # Gold border (double-line ornate)
+            bc = GOLD if hovered else (140, 110, 40)
+            pygame.draw.rect(self.screen, bc, (cx, cy, box_w, box_h), 3)
+            pygame.draw.rect(self.screen, (100, 75, 25),
+                             (cx + 4, cy + 4, box_w - 8, box_h - 8), 1)
+
+            # Corner ornaments
+            for co_x, co_y in [(cx + 6, cy + 6), (cx + box_w - 6, cy + 6),
+                               (cx + 6, cy + box_h - 6), (cx + box_w - 6, cy + box_h - 6)]:
+                pygame.draw.circle(self.screen, bc, (co_x, co_y), 3)
+
+            # Top color accent strip
+            pygame.draw.rect(self.screen, pu["color"],
+                             (cx + inner_m, cy + inner_m, box_w - inner_m * 2, 4))
+
+            # Icon area (center, draws a symbolic icon based on power-up color)
+            icon_cx = cx + box_w // 2
+            icon_cy = cy + 55
+            # Icon glow
+            ig = pygame.Surface((50, 50), pygame.SRCALPHA)
+            gi = int(30 + 15 * math.sin(t * 3 + i))
+            pygame.draw.circle(ig, (*pu["color"], gi), (25, 25), 25)
+            self.screen.blit(ig, (icon_cx - 25, icon_cy - 25))
+            # Icon symbol (simple but effective)
+            ic = pu["color"]
+            if "Damage" in pu["name"] or "Explosion" in pu["name"]:
+                # Fire/explosion icon
+                for fi in range(5):
+                    fa = fi * math.pi * 2 / 5 + t * 2
+                    fx = icon_cx + int(math.cos(fa) * 12)
+                    fy = icon_cy + int(math.sin(fa) * 12)
+                    pygame.draw.circle(self.screen, ic, (fx, fy), 5)
+                pygame.draw.circle(self.screen, FIRE_BRIGHT, (icon_cx, icon_cy), 8)
+            elif "Speed" in pu["name"]:
+                # Arrow icon
+                pygame.draw.polygon(self.screen, ic, [
+                    (icon_cx + 15, icon_cy), (icon_cx - 5, icon_cy - 10),
+                    (icon_cx - 5, icon_cy - 4), (icon_cx - 15, icon_cy - 4),
+                    (icon_cx - 15, icon_cy + 4), (icon_cx - 5, icon_cy + 4),
+                    (icon_cx - 5, icon_cy + 10)])
+            elif "HP" in pu["name"] or "Heal" in pu["name"]:
+                # Heart/cross icon
+                pygame.draw.rect(self.screen, ic, (icon_cx - 8, icon_cy - 3, 16, 6))
+                pygame.draw.rect(self.screen, ic, (icon_cx - 3, icon_cy - 8, 6, 16))
+            elif "Lightning" in pu["name"]:
+                # Bolt icon
+                pygame.draw.polygon(self.screen, ic, [
+                    (icon_cx - 2, icon_cy - 14), (icon_cx - 8, icon_cy + 2),
+                    (icon_cx - 1, icon_cy + 2), (icon_cx + 2, icon_cy + 14),
+                    (icon_cx + 8, icon_cy - 2), (icon_cx + 1, icon_cy - 2)])
+            elif "Orbit" in pu["name"]:
+                # Spinning blades icon
+                for bi in range(3):
+                    ba = bi * math.pi * 2 / 3 + t * 3
+                    bx_o = icon_cx + int(math.cos(ba) * 10)
+                    by_o = icon_cy + int(math.sin(ba) * 10)
+                    pygame.draw.circle(self.screen, ic, (bx_o, by_o), 5)
+                pygame.draw.circle(self.screen, WHITE, (icon_cx, icon_cy), 4, 1)
+            elif "Aura" in pu["name"]:
+                # Ring icon
+                pygame.draw.circle(self.screen, ic, (icon_cx, icon_cy), 14, 3)
+                pygame.draw.circle(self.screen, ic, (icon_cx, icon_cy), 8, 2)
+            elif "Magnet" in pu["name"]:
+                # Magnet icon
+                pygame.draw.arc(self.screen, ic,
+                                (icon_cx - 10, icon_cy - 10, 20, 20), 0, math.pi, 4)
+                pygame.draw.line(self.screen, ic, (icon_cx - 10, icon_cy),
+                                 (icon_cx - 10, icon_cy + 8), 4)
+                pygame.draw.line(self.screen, ic, (icon_cx + 10, icon_cy),
+                                 (icon_cx + 10, icon_cy + 8), 4)
+            else:
+                # Generic star icon
+                for si in range(5):
+                    sa = si * math.pi * 2 / 5 - math.pi / 2
+                    sa2 = sa + math.pi / 5
+                    px1 = icon_cx + int(math.cos(sa) * 14)
+                    py1 = icon_cy + int(math.sin(sa) * 14)
+                    px2 = icon_cx + int(math.cos(sa2) * 6)
+                    py2 = icon_cy + int(math.sin(sa2) * 6)
+                    pygame.draw.line(self.screen, ic, (icon_cx, icon_cy), (px1, py1), 2)
+                    pygame.draw.circle(self.screen, ic, (px1, py1), 3)
+
+            # Power-up name (with outline)
+            name_y = cy + 100
+            for ox, oy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                draw_text(self.screen, pu["name"].upper(), 17,
+                          cx + box_w // 2 + ox, name_y + oy, (10, 5, 5), center=True)
+            draw_text(self.screen, pu["name"].upper(), 17,
+                      cx + box_w // 2, name_y, pu["color"], center=True)
+            # Description
+            draw_text(self.screen, pu["desc"], 13,
+                      cx + box_w // 2, name_y + 22, LIGHT_GRAY, center=True)
+            # Key hint
+            draw_text(self.screen, f"[{i + 1}]", 12,
+                      cx + box_w // 2, cy + box_h - 14, GRAY, center=True)
+
+            # Hover highlight glow
+            if hovered:
+                hl = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+                hl.fill((255, 200, 80, 15))
+                self.screen.blit(hl, (cx, cy))
 
     def draw_gameover(self):
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
